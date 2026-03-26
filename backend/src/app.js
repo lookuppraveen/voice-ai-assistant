@@ -10,9 +10,23 @@ const app = express();
 
 // Security
 app.use(helmet());
+const allowedOrigins = [
+  env.frontendUrl,
+  'http://localhost:3000',
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: env.frontendUrl,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.some(o => origin.startsWith(o.replace(/\/$/, '')))) {
+        return callback(null, true);
+      }
+      // Also allow any *.vercel.app subdomain for preview deployments
+      if (origin.endsWith('.vercel.app')) return callback(null, true);
+      callback(new Error(`CORS blocked: ${origin}`));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
