@@ -17,7 +17,12 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (res) => res,
   (err) => {
-    if (err.response?.status === 401) {
+    const code = err.response?.data?.code;
+    // Only redirect to login on genuine token errors, not DB/server errors
+    if (
+      err.response?.status === 401 &&
+      (code === 'TOKEN_EXPIRED' || code === 'INVALID_TOKEN' || err.response?.data?.error === 'No token provided')
+    ) {
       Cookies.remove('token');
       if (typeof window !== 'undefined') {
         window.location.href = '/login';
