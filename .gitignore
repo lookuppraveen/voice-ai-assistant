@@ -1,0 +1,25 @@
+# Environment files (NEVER commit these)
+backend/.env
+frontend/.env.local
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Next.js build
+frontend/.next/
+frontend/out/
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Coverage
+coverage/
+
+# Docker volumes
+pgdata/
