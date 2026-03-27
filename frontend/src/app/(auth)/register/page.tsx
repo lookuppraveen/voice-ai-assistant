@@ -16,7 +16,6 @@ export default function RegisterPage() {
     password: '',
     full_name: '',
     department: '',
-    role: 'candidate',
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +27,7 @@ export default function RegisterPage() {
     try {
       const res = await authApi.register(form);
       setAuth(res.data.token, res.data.user);
-      router.push(form.role === 'candidate' ? '/dashboard' : '/admin');
+      router.push('/dashboard');
     } catch (err: any) {
       setError(err.response?.data?.error || err.response?.data?.errors?.[0]?.msg || 'Registration failed');
     } finally {
@@ -98,18 +97,6 @@ export default function RegisterPage() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
                 placeholder="Sales, Enterprise..."
               />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
-              <select
-                value={form.role}
-                onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
-              >
-                <option value="candidate">Candidate</option>
-                <option value="supervisor">Supervisor</option>
-                <option value="admin">Admin</option>
-              </select>
             </div>
             <Button type="submit" className="w-full" size="lg" loading={loading}>
               Create Account

@@ -84,7 +84,8 @@ export default function ProfilePage() {
 
       {/* Nav */}
       <nav className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-800 px-6 py-3 flex items-center justify-between sticky top-0 z-20">
-        <Logo theme="light" className="h-10 w-auto" />
+        <Logo theme="light" className="h-10 w-auto block dark:hidden" />
+        <Logo theme="dark" className="h-10 w-auto hidden dark:block" />
         <div className="flex items-center gap-3">
           <ThemeToggle />
           <button

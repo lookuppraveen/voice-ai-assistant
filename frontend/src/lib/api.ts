@@ -68,6 +68,10 @@ export const adminApi = {
     api.get(`/api/admin/candidates/${id}/sessions`),
   toggleStatus: (id: string) =>
     api.patch(`/api/admin/candidates/${id}/status`),
+  listUsers: (search = '') =>
+    api.get(`/api/admin/users?search=${encodeURIComponent(search)}`),
+  updateUserRole: (id: string, role: string) =>
+    api.patch(`/api/admin/users/${id}/role`, { role }),
 };
 
 export default api;

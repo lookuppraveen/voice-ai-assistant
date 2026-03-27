@@ -11,10 +11,10 @@ import { Logo } from '@/components/ui/Logo';
 import {
   Users, BarChart2, Star, LogOut, TrendingUp,
   Activity, Search, ChevronRight, Award, X,
-  Clock, Calendar, Filter, Eye,
+  Clock, Calendar, Filter, Eye, ShieldCheck,
 } from 'lucide-react';
 
-type Tab = 'overview' | 'candidates' | 'sessions';
+type Tab = 'overview' | 'candidates' | 'sessions' | 'users';
 
 interface DashboardData {
   stats: AdminStats;
@@ -496,6 +496,149 @@ function OverviewTab({ data, onNavigate }: { data: DashboardData; onNavigate: (t
   );
 }
 
+// ─── Users Tab ────────────────────────────────────────────────────────────────
+const ROLE_COLORS: Record<string, string> = {
+  admin:      'bg-red-50 dark:bg-red-400/10 text-red-700 dark:text-red-400 border-red-200 dark:border-red-400/20',
+  supervisor: 'bg-purple-50 dark:bg-purple-400/10 text-purple-700 dark:text-purple-400 border-purple-200 dark:border-purple-400/20',
+  candidate:  'bg-blue-50 dark:bg-blue-400/10 text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-400/20',
+};
+
+function UsersTab() {
+  const [users, setUsers] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const loadUsers = useCallback((q: string) => {
+    setLoading(true);
+    adminApi.listUsers(q)
+      .then(res => setUsers(res.data.users))
+      .finally(() => setLoading(false));
+  }, []);
+
+  useEffect(() => { loadUsers(''); }, [loadUsers]);
+
+  const handleSearch = (q: string) => {
+    setSearch(q);
+    loadUsers(q);
+  };
+
+  const handleRoleChange = async (id: string, role: string) => {
+    setUpdatingId(id);
+    try {
+      await adminApi.updateUserRole(id, role);
+      setUsers(prev => prev.map(u => u.id === id ? { ...u, role } : u));
+      setToast('Role updated successfully');
+      setTimeout(() => setToast(null), 3000);
+    } catch {
+      setToast('Failed to update role');
+      setTimeout(() => setToast(null), 3000);
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  return (
+    <div>
+      {toast && (
+        <div className="fixed top-20 right-6 z-50 px-4 py-3 rounded-xl shadow-lg border text-sm font-medium bg-emerald-50 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-700">
+          {toast}
+        </div>
+      )}
+
+      <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-sm">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-gray-200 dark:border-slate-800 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="text-gray-900 dark:text-white font-semibold text-base">All Users</h2>
+            <p className="text-gray-400 dark:text-slate-500 text-xs mt-0.5">{users.length} registered users</p>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 dark:text-slate-500 pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by name or email…"
+              value={search}
+              onChange={e => handleSearch(e.target.value)}
+              className="pl-9 pr-4 py-2 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg text-sm text-gray-900 dark:text-slate-200 placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 w-64 transition-all"
+            />
+          </div>
+        </div>
+
+        {loading ? (
+          <div className="p-8 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-14 bg-gray-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        ) : users.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <Users className="h-8 w-8 text-gray-300 dark:text-slate-600" />
+            <p className="text-gray-400 dark:text-slate-500 text-sm">No users found</p>
+          </div>
+        ) : (
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-slate-800">
+                {['User', 'Department', 'Current Role', 'Change Role', 'Joined'].map(h => (
+                  <th key={h} className="px-5 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider bg-gray-50 dark:bg-slate-800/50">
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100 dark:divide-slate-800/60">
+              {users.map(u => (
+                <tr key={u.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors">
+                  <td className="px-5 py-3.5">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                        {u.full_name?.charAt(0).toUpperCase() ?? '?'}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-200">{u.full_name}</p>
+                        <p className="text-xs text-gray-400 dark:text-slate-500">{u.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3.5 text-sm text-gray-500 dark:text-slate-400">
+                    {u.department || '—'}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold border capitalize ${ROLE_COLORS[u.role] ?? ''}`}>
+                      <ShieldCheck className="h-3 w-3" />
+                      {u.role}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <select
+                      value={u.role}
+                      disabled={updatingId === u.id}
+                      onChange={e => handleRoleChange(u.id, e.target.value)}
+                      className="px-2.5 py-1.5 text-sm text-gray-700 dark:text-white bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 disabled:opacity-50 cursor-pointer"
+                    >
+                      <option value="candidate">Candidate</option>
+                      <option value="supervisor">Supervisor</option>
+                      <option value="admin">Admin</option>
+                    </select>
+                    {updatingId === u.id && (
+                      <span className="ml-2 text-xs text-gray-400 dark:text-slate-500">Saving…</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-sm text-gray-400 dark:text-slate-500">
+                    {new Date(u.created_at).toLocaleDateString()}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function AdminDashboard() {
   const router = useRouter();
@@ -529,21 +672,24 @@ export default function AdminDashboard() {
   }
 
   const TAB_CONFIG: { id: Tab; icon: any; label: string }[] = [
-    { id: 'overview',   icon: BarChart2, label: 'Overview'   },
-    { id: 'candidates', icon: Users,     label: 'Candidates' },
-    { id: 'sessions',   icon: Activity,  label: 'Sessions'   },
+    { id: 'overview',   icon: BarChart2,    label: 'Overview'   },
+    { id: 'candidates', icon: Users,        label: 'Candidates' },
+    { id: 'sessions',   icon: Activity,     label: 'Sessions'   },
+    { id: 'users',      icon: ShieldCheck,  label: 'Users'      },
   ];
 
   const PAGE_TITLES: Record<Tab, string> = {
     overview:   'Supervisor Dashboard',
     candidates: 'Candidates',
     sessions:   'All Sessions',
+    users:      'User Management',
   };
 
   const PAGE_SUB: Record<Tab, string> = {
     overview:   'Monitor candidate performance & sessions',
     candidates: 'Manage and review all registered candidates',
     sessions:   'Browse and filter all training sessions',
+    users:      'Manage user accounts and assign roles',
   };
 
   return (
@@ -621,6 +767,7 @@ export default function AdminDashboard() {
           {activeTab === 'overview'   && data && <OverviewTab data={data} onNavigate={setActiveTab} />}
           {activeTab === 'candidates' && <CandidatesTab />}
           {activeTab === 'sessions'   && <SessionsTab />}
+          {activeTab === 'users'      && <UsersTab />}
         </main>
       </div>
     </div>

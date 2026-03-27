@@ -6,6 +6,8 @@ const {
   getCandidateSessions,
   toggleCandidateStatus,
   listAllSessions,
+  listUsers,
+  updateUserRole,
 } = require('../controllers/adminController');
 
 router.use(authenticate, authorize('admin', 'supervisor'));
@@ -15,5 +17,7 @@ router.get('/sessions', listAllSessions);
 router.get('/candidates', listCandidates);
 router.get('/candidates/:id/sessions', getCandidateSessions);
 router.patch('/candidates/:id/status', toggleCandidateStatus);
+router.get('/users', listUsers);
+router.patch('/users/:id/role', updateUserRole);
 
 module.exports = router;

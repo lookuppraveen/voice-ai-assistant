@@ -185,10 +185,50 @@ const listAllSessions = async (req, res, next) => {
   }
 };
 
+// GET /api/admin/users  — list all users (any role)
+const listUsers = async (req, res, next) => {
+  try {
+    const { search = '' } = req.query;
+    const searchParam = `%${search}%`;
+    const result = await query(
+      `SELECT id, email, full_name, department, role, is_active, created_at
+       FROM users
+       WHERE full_name ILIKE $1 OR email ILIKE $1
+       ORDER BY created_at DESC`,
+      [searchParam]
+    );
+    res.json({ users: result.rows });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// PATCH /api/admin/users/:id/role
+const updateUserRole = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { role } = req.body;
+    const allowed = ['candidate', 'supervisor', 'admin'];
+    if (!allowed.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be candidate, supervisor, or admin.' });
+    }
+    const result = await query(
+      `UPDATE users SET role = $1 WHERE id = $2 RETURNING id, email, full_name, role`,
+      [role, id]
+    );
+    if (result.rows.length === 0) return res.status(404).json({ error: 'User not found' });
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   listCandidates,
   getCandidateSessions,
   toggleCandidateStatus,
   listAllSessions,
+  listUsers,
+  updateUserRole,
 };
