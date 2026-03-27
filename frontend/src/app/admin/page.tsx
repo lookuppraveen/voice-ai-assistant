@@ -177,10 +177,10 @@ function SessionsTab() {
           <select
             value={scenarioFilter}
             onChange={e => { setScenarioFilter(e.target.value); setPage(1); }}
-            className="text-sm text-gray-700 dark:text-slate-200 bg-transparent focus:outline-none"
+            className="text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none"
           >
-            <option value="">All Scenarios</option>
-            {Object.entries(SCENARIO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            <option value="" className="text-gray-900 bg-white dark:bg-slate-800">All Scenarios</option>
+            {Object.entries(SCENARIO_LABELS).map(([k, v]) => <option key={k} value={k} className="text-gray-900 bg-white dark:bg-slate-800">{v}</option>)}
           </select>
         </div>
         <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg">
@@ -188,12 +188,12 @@ function SessionsTab() {
           <select
             value={statusFilter}
             onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            className="text-sm text-gray-700 dark:text-slate-200 bg-transparent focus:outline-none"
+            className="text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none"
           >
-            <option value="">All Statuses</option>
-            <option value="completed">Completed</option>
-            <option value="in_progress">In Progress</option>
-            <option value="abandoned">Abandoned</option>
+            <option value="" className="text-gray-900 bg-white dark:bg-slate-800">All Statuses</option>
+            <option value="completed" className="text-gray-900 bg-white dark:bg-slate-800">Completed</option>
+            <option value="in_progress" className="text-gray-900 bg-white dark:bg-slate-800">In Progress</option>
+            <option value="abandoned" className="text-gray-900 bg-white dark:bg-slate-800">Abandoned</option>
           </select>
         </div>
         <span className="ml-auto text-sm text-gray-400 dark:text-slate-500">{total} total sessions</span>
