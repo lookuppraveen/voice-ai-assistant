@@ -172,30 +172,25 @@ function SessionsTab() {
     <div>
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3 mb-6">
-        <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg">
-          <Filter className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
-          <select
-            value={scenarioFilter}
-            onChange={e => { setScenarioFilter(e.target.value); setPage(1); }}
-            className="text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none"
-          >
-            <option value="" className="text-gray-900 bg-white dark:bg-slate-800">All Scenarios</option>
-            {Object.entries(SCENARIO_LABELS).map(([k, v]) => <option key={k} value={k} className="text-gray-900 bg-white dark:bg-slate-800">{v}</option>)}
-          </select>
-        </div>
-        <div className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg">
-          <Filter className="h-3.5 w-3.5 text-gray-400 dark:text-slate-500" />
-          <select
-            value={statusFilter}
-            onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
-            className="text-sm text-gray-900 dark:text-white bg-transparent focus:outline-none"
-          >
-            <option value="" className="text-gray-900 bg-white dark:bg-slate-800">All Statuses</option>
-            <option value="completed" className="text-gray-900 bg-white dark:bg-slate-800">Completed</option>
-            <option value="in_progress" className="text-gray-900 bg-white dark:bg-slate-800">In Progress</option>
-            <option value="abandoned" className="text-gray-900 bg-white dark:bg-slate-800">Abandoned</option>
-          </select>
-        </div>
+        <select
+          value={scenarioFilter}
+          onChange={e => { setScenarioFilter(e.target.value); setPage(1); }}
+          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-white bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
+        >
+          <option value="">All Scenarios</option>
+          {Object.entries(SCENARIO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+
+        <select
+          value={statusFilter}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1); }}
+          className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-gray-700 dark:text-white bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/50 cursor-pointer"
+        >
+          <option value="">All Statuses</option>
+          <option value="completed">Completed</option>
+          <option value="in_progress">In Progress</option>
+          <option value="abandoned">Abandoned</option>
+        </select>
         <span className="ml-auto text-sm text-gray-400 dark:text-slate-500">{total} total sessions</span>
       </div>
 
@@ -557,10 +552,9 @@ export default function AdminDashboard() {
       {/* ── Sidebar ── */}
       <aside className="w-64 bg-white dark:bg-slate-900 border-r border-gray-200 dark:border-slate-800 flex flex-col shrink-0 transition-colors duration-300">
         {/* Logo */}
-        <div className="px-5 py-4 border-b border-gray-200 dark:border-slate-800">
-          <div className="bg-white rounded-xl px-3 py-2 shadow-sm dark:shadow-none">
-            <Logo theme="light" className="h-9 w-auto" />
-          </div>
+        <div className="px-5 py-5 border-b border-gray-200 dark:border-slate-800">
+          <Logo theme="light" className="h-9 w-auto block dark:hidden" />
+          <Logo theme="dark" className="h-9 w-auto hidden dark:block" />
         </div>
 
         {/* Nav */}
@@ -581,27 +575,6 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        {/* Theme toggle */}
-        <div className="px-6 py-3 border-t border-gray-200 dark:border-slate-800 flex items-center justify-between">
-          <span className="text-xs font-medium text-gray-500 dark:text-slate-400">Appearance</span>
-          <ThemeToggle />
-        </div>
-
-        {/* User */}
-        <div className="px-3 py-4 border-t border-gray-200 dark:border-slate-800">
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer group">
-            <div className="h-8 w-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
-              {user?.full_name?.charAt(0).toUpperCase() ?? 'A'}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-gray-900 dark:text-slate-200 text-xs font-semibold truncate">{user?.full_name ?? 'Admin'}</p>
-              <p className="text-gray-500 dark:text-slate-500 text-xs capitalize">{user?.role}</p>
-            </div>
-            <button onClick={logout} title="Logout" className="opacity-0 group-hover:opacity-100 transition-opacity">
-              <LogOut className="h-3.5 w-3.5 text-gray-400 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400" />
-            </button>
-          </div>
-        </div>
       </aside>
 
       {/* ── Main ── */}
@@ -612,9 +585,36 @@ export default function AdminDashboard() {
             <h1 className="text-gray-900 dark:text-white font-bold text-xl">{PAGE_TITLES[activeTab]}</h1>
             <p className="text-gray-500 dark:text-slate-400 text-sm mt-0.5">{PAGE_SUB[activeTab]}</p>
           </div>
-          <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-600/30 text-xs rounded-full font-medium">
-            {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
-          </span>
+
+          {/* Right side: date · appearance · user · logout */}
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-indigo-50 dark:bg-indigo-600/20 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-600/30 text-xs rounded-full font-medium">
+              {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+            </span>
+
+            <ThemeToggle />
+
+            {/* User info */}
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-gray-100 dark:bg-slate-800 border border-gray-200 dark:border-slate-700">
+              <div className="h-6 w-6 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                {user?.full_name?.charAt(0).toUpperCase() ?? 'A'}
+              </div>
+              <div className="hidden sm:block">
+                <p className="text-gray-900 dark:text-slate-200 text-xs font-semibold leading-none">{user?.full_name ?? 'Admin'}</p>
+                <p className="text-gray-400 dark:text-slate-500 text-[10px] capitalize mt-0.5">{user?.role}</p>
+              </div>
+            </div>
+
+            {/* Logout */}
+            <button
+              onClick={logout}
+              title="Logout"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-sm text-gray-500 dark:text-slate-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 border border-gray-200 dark:border-slate-700 transition-colors"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              <span className="hidden sm:block text-xs font-medium">Logout</span>
+            </button>
+          </div>
         </header>
 
         <main className="px-8 py-8">
