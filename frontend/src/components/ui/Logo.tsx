@@ -1,23 +1,12 @@
 interface LogoProps {
-  /** dark = white text for "n" + "ise" (dark backgrounds), light = uses actual PNG image */
+  /** dark = white text (for dark backgrounds), light = dark text (for light backgrounds) */
   theme?: 'dark' | 'light';
   className?: string;
 }
 
 export function Logo({ theme = 'light', className = '' }: LogoProps) {
-  // Light mode: use the actual PNG brand image
-  if (theme === 'light') {
-    return (
-      <img
-        src="/logo.png"
-        alt="UPnRise"
-        className={className}
-        style={{ objectFit: 'contain' }}
-      />
-    );
-  }
+  const textColor = theme === 'dark' ? '#ffffff' : '#1a1a1a';
 
-  // Dark mode: SVG version with white text so it reads on dark backgrounds
   return (
     <svg
       viewBox="0 0 210 52"
@@ -35,13 +24,13 @@ export function Logo({ theme = 'light', className = '' }: LogoProps) {
         letterSpacing="-1"
       >UP</text>
 
-      {/* "n" white */}
+      {/* "n" */}
       <text
         x="52" y="36"
         fontFamily="'Arial Black', 'Arial', sans-serif"
         fontWeight="900"
         fontSize="32"
-        fill="#ffffff"
+        fill={textColor}
         letterSpacing="-1"
       >n</text>
 
@@ -53,13 +42,13 @@ export function Logo({ theme = 'light', className = '' }: LogoProps) {
       <line x1="88" y1="26" x2="81" y2="36" stroke="#F47920" strokeWidth="3" strokeLinecap="round" />
       <line x1="88" y1="26" x2="95" y2="36" stroke="#F47920" strokeWidth="3" strokeLinecap="round" />
 
-      {/* "ise" white */}
+      {/* "ise" */}
       <text
         x="100" y="36"
         fontFamily="'Arial Black', 'Arial', sans-serif"
         fontWeight="900"
         fontSize="32"
-        fill="#ffffff"
+        fill={textColor}
         letterSpacing="-1"
       >ise</text>
 
