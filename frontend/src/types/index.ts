@@ -6,6 +6,9 @@ export interface User {
   full_name: string;
   role: Role;
   department?: string;
+  phone?: string;
+  bio?: string;
+  avatar?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -72,6 +75,9 @@ export interface Evaluation {
 export interface Scenario {
   id: string;
   name: string;
+  description?: string;
+  tag?: string;
+  tagColor?: string;
 }
 
 export interface AdminStats {

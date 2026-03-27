@@ -26,4 +26,12 @@ export const clearAuth = () => {
   }
 };
 
+export const updateStoredUser = (updates: Partial<User>) => {
+  if (typeof window === 'undefined') return;
+  const raw = sessionStorage.getItem(USER_KEY);
+  if (!raw) return;
+  const user = JSON.parse(raw);
+  sessionStorage.setItem(USER_KEY, JSON.stringify({ ...user, ...updates }));
+};
+
 export const isAuthenticated = () => !!getToken();

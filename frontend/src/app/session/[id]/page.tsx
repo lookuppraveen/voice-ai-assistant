@@ -6,7 +6,8 @@ import { sessionsApi } from '@/lib/api';
 import { SessionWithBreakdown, Message, Evaluation } from '@/types';
 import { ScoreCard } from '@/components/session/ScoreCard';
 import Button from '@/components/ui/Button';
-import { ArrowLeft, RotateCcw, LayoutDashboard, Mic } from 'lucide-react';
+import { ArrowLeft, RotateCcw, LayoutDashboard } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 export default function SessionReviewPage() {
   const router = useRouter();
@@ -93,10 +94,7 @@ export default function SessionReviewPage() {
             Back
           </button>
 
-          <div className="flex items-center gap-2">
-            <Mic className="h-4 w-4 text-blue-400" />
-            <span className="text-white font-semibold text-sm">VoiceCoach AI</span>
-          </div>
+          <Logo theme="dark" className="h-8 w-auto" />
 
           <div className="flex items-center gap-2">
             <Button

@@ -81,4 +81,33 @@ const getMe = async (req, res) => {
   res.json({ user: req.user });
 };
 
-module.exports = { register, login, getMe };
+const updateProfile = async (req, res, next) => {
+  try {
+    const { full_name, department, phone, bio, avatar } = req.body;
+    const userId = req.user.id;
+
+    // Ensure extra columns exist (safe to run repeatedly)
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30)`);
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT`);
+    await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT`);
+
+    const result = await query(
+      `UPDATE users
+       SET full_name  = COALESCE($1, full_name),
+           department = COALESCE($2, department),
+           phone      = COALESCE($3, phone),
+           bio        = COALESCE($4, bio),
+           avatar     = COALESCE($5, avatar),
+           updated_at = NOW()
+       WHERE id = $6
+       RETURNING id, email, full_name, role, department, phone, bio, avatar, is_active, created_at`,
+      [full_name || null, department || null, phone || null, bio || null, avatar || null, userId]
+    );
+
+    res.json({ user: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+};
+
+module.exports = { register, login, getMe, updateProfile };

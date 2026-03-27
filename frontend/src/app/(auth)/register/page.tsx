@@ -7,7 +7,7 @@ import { authApi } from '@/lib/api';
 import { setAuth } from '@/lib/auth';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Mic } from 'lucide-react';
+import { Logo } from '@/components/ui/Logo';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -39,12 +39,10 @@ export default function RegisterPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-900 p-4">
       <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-white rounded-2xl mb-4 shadow-lg">
-            <Mic className="h-8 w-8 text-blue-600" />
+        <div className="flex justify-center mb-8">
+          <div className="bg-white rounded-2xl px-6 py-4 shadow-xl">
+            <Logo theme="light" className="h-12 w-auto" />
           </div>
-          <h1 className="text-3xl font-bold text-white">VoiceCoach AI</h1>
-          <p className="text-blue-200 mt-1">Sales Training Platform</p>
         </div>
 
         <Card>
@@ -64,7 +62,7 @@ export default function RegisterPage() {
                 required
                 value={form.full_name}
                 onChange={(e) => setForm({ ...form, full_name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
                 placeholder="Jane Smith"
               />
             </div>
@@ -75,7 +73,7 @@ export default function RegisterPage() {
                 required
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
                 placeholder="you@company.com"
               />
             </div>
@@ -87,7 +85,7 @@ export default function RegisterPage() {
                 minLength={8}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
                 placeholder="Min. 8 characters"
               />
             </div>
@@ -97,7 +95,7 @@ export default function RegisterPage() {
                 type="text"
                 value={form.department}
                 onChange={(e) => setForm({ ...form, department: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
                 placeholder="Sales, Enterprise..."
               />
             </div>
@@ -106,7 +104,7 @@ export default function RegisterPage() {
               <select
                 value={form.role}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm text-gray-900 bg-white"
               >
                 <option value="candidate">Candidate</option>
                 <option value="supervisor">Supervisor</option>

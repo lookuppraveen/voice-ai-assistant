@@ -39,6 +39,8 @@ export const authApi = {
   login: (data: { email: string; password: string }) =>
     api.post('/api/auth/login', data),
   me: () => api.get('/api/auth/me'),
+  updateProfile: (data: { full_name?: string; department?: string; phone?: string; bio?: string; avatar?: string }) =>
+    api.put('/api/auth/profile', data),
 };
 
 // Sessions
@@ -58,6 +60,8 @@ export const sessionsApi = {
 // Admin
 export const adminApi = {
   stats: () => api.get('/api/admin/stats'),
+  sessions: (page = 1, limit = 20, scenario = '', status = '') =>
+    api.get(`/api/admin/sessions?page=${page}&limit=${limit}&scenario=${scenario}&status=${status}`),
   candidates: (page = 1, limit = 20, search = '') =>
     api.get(`/api/admin/candidates?page=${page}&limit=${limit}&search=${search}`),
   candidateSessions: (id: string) =>

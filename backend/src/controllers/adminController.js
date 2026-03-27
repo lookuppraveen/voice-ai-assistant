@@ -142,9 +142,53 @@ const toggleCandidateStatus = async (req, res, next) => {
   }
 };
 
+// GET /api/admin/sessions
+const listAllSessions = async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, scenario = '', status = '' } = req.query;
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    let conditions = [];
+    let params = [parseInt(limit), offset];
+    let idx = 3;
+
+    if (scenario) { conditions.push(`s.scenario_type = $${idx++}`); params.push(scenario); }
+    if (status)   { conditions.push(`s.status = $${idx++}`);         params.push(status);   }
+
+    const where = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const result = await query(
+      `SELECT s.id, s.scenario_type, s.status, s.score, s.duration_seconds,
+              s.started_at, s.completed_at,
+              u.id as candidate_id, u.full_name, u.email, u.department
+       FROM sessions s
+       JOIN users u ON u.id = s.user_id
+       ${where}
+       ORDER BY s.started_at DESC
+       LIMIT $1 OFFSET $2`,
+      params
+    );
+
+    const countResult = await query(
+      `SELECT COUNT(*) FROM sessions s ${where}`,
+      params.slice(2)
+    );
+
+    res.json({
+      sessions: result.rows,
+      total: parseInt(countResult.rows[0].count),
+      page: parseInt(page),
+      limit: parseInt(limit),
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getDashboardStats,
   listCandidates,
   getCandidateSessions,
   toggleCandidateStatus,
+  listAllSessions,
 };
