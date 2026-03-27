@@ -13,6 +13,8 @@ app.use(helmet());
 const allowedOrigins = [
   env.frontendUrl,
   'http://localhost:3000',
+  'https://app.upnrise.com',
+  'https://upnrise.com',
 ].filter(Boolean);
 
 app.use(
