@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
+import { sessionsApi } from '@/lib/api';
 
 export type ListenState = 'idle' | 'listening' | 'processing';
 
@@ -8,136 +9,158 @@ export const useAudio = () => {
   const [listenState, setListenState] = useState<ListenState>('idle');
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<any>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-  const resolveRef = useRef<((text: string) => void) | null>(null);
-  const rejectRef = useRef<((e: Error) => void) | null>(null);
 
-  // Preload voices on mount (Chrome lazy-loads them)
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.getVoices();
-      window.speechSynthesis.addEventListener('voiceschanged', () => {});
-    }
-  }, []);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const currentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   /**
-   * Start listening — returns a Promise that resolves with the transcribed text
-   * when the user stops speaking.
+   * Start recording microphone
    */
-  const startListening = useCallback((): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      setError(null);
-
-      const SpeechRecognition =
-        (window as any).SpeechRecognition ||
-        (window as any).webkitSpeechRecognition;
-
-      if (!SpeechRecognition) {
-        const msg = 'Speech recognition is not supported in this browser. Please use Chrome or Edge.';
-        setError(msg);
-        reject(new Error(msg));
-        return;
-      }
-
-      const recognition = new SpeechRecognition();
-      recognitionRef.current = recognition;
-      
-      let promiseSettled = false;
-      const safeResolve = (val: string) => {
-        if (!promiseSettled) { promiseSettled = true; resolve(val); }
-      };
-      const safeReject = (val: Error) => {
-        if (!promiseSettled) { promiseSettled = true; reject(val); }
-      };
-
-      recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
-      recognition.continuous = false;
-
-      recognition.onstart = () => setListenState('listening');
-
-      recognition.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript.trim();
-        setListenState('processing');
-        safeResolve(transcript);
-      };
-
-      recognition.onerror = (event: any) => {
-        setListenState('idle');
-        if (event.error === 'no-speech') {
-          // If the user didn't speak in time, safely resolve empty instead of rejecting.
-          // This allows the caller to loop/restart if auto-listen is active without breaking.
-          safeResolve('');
-          return;
-        }
-        
-        const msg =
-          event.error === 'not-allowed'
-            ? 'Microphone permission denied. Please allow access in your browser.'
-            : `Speech recognition error: ${event.error}`;
-        setError(msg);
-        safeReject(new Error(msg));
-      };
-
-      recognition.onend = () => {
-        setListenState('idle');
-        safeResolve(''); // Ensure it always resolves if it stops magically
-      };
-
+  const startListening = useCallback((autoStopEnabled = false): Promise<Blob | null> => {
+    return new Promise(async (resolve) => {
       try {
-        recognition.start();
+        setError(null);
+        setListenState('idle');
+
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+
+        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        mediaRecorderRef.current = mediaRecorder;
+
+        const audioChunks: BlobPart[] = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) audioChunks.push(e.data);
+        };
+
+        const cleanup = () => {
+          if (audioContextRef.current) {
+            audioContextRef.current.close().catch(() => {});
+            audioContextRef.current = null;
+          }
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach((track) => track.stop());
+            streamRef.current = null;
+          }
+        };
+
+        mediaRecorder.onstop = () => {
+          cleanup();
+          setListenState('processing');
+          if (audioChunks.length === 0) {
+            setListenState('idle');
+            resolve(null);
+            return;
+          }
+          const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+          resolve(audioBlob);
+        };
+
+        if (autoStopEnabled) {
+          const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
+          const audioCtx = new AudioContext();
+          audioContextRef.current = audioCtx;
+          const source = audioCtx.createMediaStreamSource(stream);
+          const analyser = audioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          source.connect(analyser);
+
+          const dataArray = new Uint8Array(analyser.frequencyBinCount);
+          let silenceStart = Date.now();
+          let hasSpoken = false;
+
+          const tick = () => {
+            if (mediaRecorder.state !== 'recording') return;
+
+            analyser.getByteFrequencyData(dataArray);
+            let sum = 0;
+            for (let i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            const avg = sum / dataArray.length;
+
+            if (avg > 15) { // Active speaking threshold
+              hasSpoken = true;
+              silenceStart = Date.now();
+            }
+
+            if (hasSpoken && Date.now() - silenceStart > 1500) {
+              mediaRecorder.stop();
+            } else if (!hasSpoken && Date.now() - silenceStart > 10000) { // Timeout if no one speaks
+              mediaRecorder.stop();
+            } else {
+              requestAnimationFrame(tick);
+            }
+          };
+
+          requestAnimationFrame(tick);
+        }
+
+        mediaRecorder.start();
+        setListenState('listening');
       } catch (err: any) {
         setListenState('idle');
-        const msg = `Failed to start microphone: ${err.message || 'Unknown error'}`;
-        setError(msg);
-        safeReject(new Error(msg));
+        setError(`Microphone error: ${err.message}`);
+        resolve(null);
       }
     });
   }, []);
 
   const stopListening = useCallback(() => {
-    recognitionRef.current?.stop();
-    setListenState('idle');
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      mediaRecorderRef.current.stop();
+    }
   }, []);
 
-  /** Browser TTS via Web Speech API — free, no API key needed */
-  const speakText = useCallback((text: string): Promise<void> => {
-    return new Promise((resolve) => {
-      if (typeof window === 'undefined' || !window.speechSynthesis) {
-        resolve();
-        return;
-      }
+  /**
+   * Fetch TTS from backend and play it natively
+   */
+  const speakText = useCallback(async (text: string): Promise<void> => {
+    if (!text || !text.trim()) return;
 
-      window.speechSynthesis.cancel();
+    try {
+      setIsSpeaking(true);
+      setError(null);
 
-      const utterance = new SpeechSynthesisUtterance(text);
-      utteranceRef.current = utterance; // Prevent garbage collection bug in Chrome
+      const res = await sessionsApi.getTTSAudio(text);
+      const url = URL.createObjectURL(res.data);
+      const audio = new Audio(url);
+      currentAudioRef.current = audio;
 
-      const voices = window.speechSynthesis.getVoices();
-      const preferred =
-        voices.find((v) => v.name === 'Google US English') ||
-        voices.find((v) => v.name.includes('Google') && v.lang === 'en-US') ||
-        voices.find((v) => v.name.includes('Microsoft') && v.lang === 'en-US') ||
-        voices.find((v) => v.lang === 'en-US');
-      if (preferred) utterance.voice = preferred;
-
-      utterance.rate = 0.95;
-      utterance.pitch = 1.0;
-      utterance.volume = 1.0;
-
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => { setIsSpeaking(false); utteranceRef.current = null; resolve(); };
-      utterance.onerror = () => { setIsSpeaking(false); utteranceRef.current = null; resolve(); };
-
-      window.speechSynthesis.speak(utterance);
-    });
+      return new Promise((resolve) => {
+        audio.onended = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          currentAudioRef.current = null;
+          resolve();
+        };
+        audio.onerror = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          currentAudioRef.current = null;
+          resolve();
+        };
+        audio.play().catch((err) => {
+          setError(`Audio play failed: ${err.message}`);
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          currentAudioRef.current = null;
+          resolve();
+        });
+      });
+    } catch (err: any) {
+      setError('Failed to load HQ audio response.');
+      setIsSpeaking(false);
+    }
   }, []);
 
   const stopSpeaking = useCallback(() => {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
       setIsSpeaking(false);
     }
   }, []);

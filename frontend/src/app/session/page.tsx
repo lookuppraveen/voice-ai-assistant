@@ -54,17 +54,18 @@ function SessionContent() {
   // ── Core turn handler ────────────────────────────────────────────────────────
   const doTurn = useCallback(async () => {
     try {
-      const transcript = await audio.startListening();
-      if (!transcript) {
+      const audioBlob = await audio.startListening(autoListenRef.current);
+      if (!audioBlob) {
         // If the mic stopped because of no-speech timeout but Auto-listen is still ON,
-        // we restart the listener after a tiny delay so it doesn't get stuck.
+        // we restart the listener. We must wait at least 1500ms, otherwise Chrome thinks we are
+        // abusing the microphone API and will completely lock it silently.
         if (autoListenRef.current && !stopLoopRef.current) {
-          setTimeout(doTurn, 250);
+          setTimeout(doTurn, 1500);
         }
         return;
       }
 
-      const aiText = await session.sendTurn(transcript);
+      const aiText = await session.sendAudioTurn(audioBlob);
       if (!aiText) return;
 
       // Apply response delay with countdown

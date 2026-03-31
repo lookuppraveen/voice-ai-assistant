@@ -9,6 +9,7 @@ const {
   completeSession,
   listSessions,
   getSession,
+  generateTTS,
 } = require('../controllers/sessionController');
 
 // Store audio in memory (max 10MB)
@@ -31,8 +32,9 @@ router.get('/scenarios', listScenarios);
 router.get('/', listSessions);
 router.post('/', startSession);
 router.get('/:id', getSession);
-router.post('/:id/turn', upload.single('audio'), processTurn);   // legacy Whisper route
+router.post('/:id/turn', upload.single('audio'), processTurn);   // Whisper STT route
 router.post('/:id/text-turn', processTextTurn);                    // browser STT route
 router.post('/:id/complete', completeSession);
+router.post('/tts', generateTTS);                                  // ElevenLabs TTS route
 
 module.exports = router;

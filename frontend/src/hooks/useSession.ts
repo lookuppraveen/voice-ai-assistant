@@ -97,6 +97,45 @@ export const useSession = () => {
     }
   }, [state.sessionId]);
 
+  const sendAudioTurn = useCallback(async (audioBlob: Blob): Promise<string | null> => {
+    if (!state.sessionId) return null;
+    setState((s) => ({ ...s, isLoading: true, error: null }));
+
+    try {
+      const res = await sessionsApi.sendAudioTurn(state.sessionId, audioBlob);
+      const { user_message, ai_response, turn } = res.data;
+
+      const userMsg: Message = {
+        id: `user-${turn}`,
+        session_id: state.sessionId,
+        role: 'user',
+        content: user_message,
+        turn_number: turn,
+        created_at: new Date().toISOString(),
+      };
+
+      const aiMsg: Message = {
+        id: `ai-${turn + 1}`,
+        session_id: state.sessionId,
+        role: 'assistant',
+        content: ai_response.text,
+        turn_number: turn + 1,
+        created_at: new Date().toISOString(),
+      };
+
+      setState((s) => ({
+        ...s,
+        messages: [...s.messages, userMsg, aiMsg],
+        isLoading: false,
+      }));
+
+      return ai_response.text;
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to process audio turn');
+      return null;
+    }
+  }, [state.sessionId]);
+
   const completeSession = useCallback(async (): Promise<Evaluation | null> => {
     if (!state.sessionId) return null;
     setState((s) => ({ ...s, isLoading: true, error: null }));
@@ -130,5 +169,5 @@ export const useSession = () => {
     });
   }, []);
 
-  return { ...state, startSession, sendTurn, completeSession, reset };
+  return { ...state, startSession, sendTurn, sendAudioTurn, completeSession, reset };
 };

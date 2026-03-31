@@ -1,7 +1,7 @@
 const { query } = require('../config/database');
 const { getAIResponse, evaluateSession, getScenarios } = require('../services/claudeService');
 const { transcribeAudio } = require('../services/whisperService');
-// TTS is handled by the browser (Web Speech API) — no server-side TTS needed
+const { generateAudio } = require('../services/elevenLabsService');
 
 // GET /api/scenarios
 const listScenarios = (req, res) => {
@@ -323,6 +323,30 @@ const getSession = async (req, res, next) => {
   }
 };
 
+// POST /api/sessions/tts — Generate speech using ElevenLabs
+const generateTTS = async (req, res, next) => {
+  try {
+    const { text } = req.body;
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Text required for TTS' });
+    }
+    
+    const audioBuffer = await generateAudio(text);
+    if (!audioBuffer) {
+      return res.status(500).json({ error: 'Audio generation failed' });
+    }
+
+    res.set('Content-Type', 'audio/mpeg');
+    res.set('Content-Length', audioBuffer.length);
+    res.send(audioBuffer);
+  } catch (err) {
+    if (err.message.includes('API Key is invalid')) {
+      return res.status(401).json({ error: err.message });
+    }
+    next(err);
+  }
+};
+
 module.exports = {
   listScenarios,
   startSession,
@@ -331,4 +355,5 @@ module.exports = {
   completeSession,
   listSessions,
   getSession,
+  generateTTS,
 };

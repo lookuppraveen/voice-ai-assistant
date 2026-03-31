@@ -53,6 +53,15 @@ export const sessionsApi = {
     api.post('/api/sessions', { scenario_type }),
   sendTextTurn: (sessionId: string, text: string) =>
     api.post(`/api/sessions/${sessionId}/text-turn`, { text }),
+  sendAudioTurn: (sessionId: string, audioBlob: Blob) => {
+    const formData = new FormData();
+    formData.append('audio', audioBlob, 'turn.webm');
+    return api.post(`/api/sessions/${sessionId}/turn`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+  },
+  getTTSAudio: (text: string) =>
+    api.post('/api/sessions/tts', { text }, { responseType: 'blob' }),
   complete: (sessionId: string) =>
     api.post(`/api/sessions/${sessionId}/complete`),
 };
