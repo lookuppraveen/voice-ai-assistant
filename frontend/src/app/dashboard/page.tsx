@@ -18,11 +18,13 @@ import {
 
 const SESSIONS_PER_PAGE = 5;
 
-const SCENARIO_ICONS: Record<string, React.ReactNode> = {
-  cold_call:            <PhoneCall className="h-6 w-6 text-blue-600" />,
-  product_demo:         <Presentation className="h-6 w-6 text-purple-600" />,
-  objection_handling:   <ShieldAlert className="h-6 w-6 text-orange-500" />,
-  groww_discovery_call: <Building2 className="h-6 w-6 text-emerald-600" />,
+const getIconForScenario = (id: string, category?: string, className: string = "h-6 w-6") => {
+  if (category === 'Arkahub Solar' || id.includes('arkahub')) return <Presentation className={className + " text-orange-500"} />;
+  if (category === 'Cold Call' || id.startsWith('cold_call')) return <PhoneCall className={className + " text-blue-600"} />;
+  if (category === 'Product Demo' || id.startsWith('product_demo')) return <Presentation className={className + " text-purple-600"} />;
+  if (category === 'Objection Handling' || id.startsWith('objection_')) return <ShieldAlert className={className + " text-orange-500"} />;
+  if (category === 'HNI Discovery' || id.includes('groww')) return <Building2 className={className + " text-emerald-600"} />;
+  return <Play className={className + " text-gray-500"} />;
 };
 
 const TAG_STYLES: Record<string, string> = {
@@ -72,6 +74,14 @@ export default function DashboardPage() {
   // Pagination
   const totalPages = Math.ceil(sessions.length / SESSIONS_PER_PAGE);
   const pagedSessions = sessions.slice((sessionPage - 1) * SESSIONS_PER_PAGE, sessionPage * SESSIONS_PER_PAGE);
+
+  // Group scenarios
+  const groupedScenarios = scenarios.reduce((acc, scenario) => {
+    const cat = scenario.category || 'Other';
+    if (!acc[cat]) acc[cat] = [];
+    acc[cat].push(scenario);
+    return acc;
+  }, {} as Record<string, Scenario[]>);
 
   if (loading) {
     return (
@@ -157,49 +167,56 @@ export default function DashboardPage() {
         {/* ── Start Training ── */}
         <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm mb-8">
           <h2 className="text-gray-900 dark:text-white font-bold text-lg mb-1">Start a Training Session</h2>
-          <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">Choose a scenario to practice</p>
+          <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">Choose a scenario topic to practice</p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {scenarios.map((s) => {
-              const color = s.tagColor ?? 'blue';
-              const isHNI = s.id === 'groww_discovery_call';
-              return (
-                <button
-                  key={s.id}
-                  onClick={() => router.push(`/session?scenario=${s.id}`)}
-                  className={`relative p-5 border-2 border-gray-200 dark:border-slate-700 rounded-2xl transition-all text-left group flex flex-col gap-3 ${BORDER_HOVER[color]} ${isHNI ? 'ring-1 ring-emerald-200 dark:ring-emerald-800' : ''}`}
-                >
-                  {isHNI && (
-                    <span className="absolute top-3 right-3 text-[10px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded-full uppercase tracking-wide">New</span>
-                  )}
-                  <div className={`h-11 w-11 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform ${
-                    color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/30' :
-                    color === 'purple' ? 'bg-purple-50 dark:bg-purple-900/30' :
-                    color === 'orange' ? 'bg-orange-50 dark:bg-orange-900/30' :
-                    'bg-emerald-50 dark:bg-emerald-900/30'
-                  }`}>
-                    {SCENARIO_ICONS[s.id] ?? <Play className="h-6 w-6 text-gray-500" />}
-                  </div>
-                  {s.tag && (
-                    <span className={`self-start text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TAG_STYLES[color]}`}>
-                      {s.tag}
-                    </span>
-                  )}
-                  <div>
-                    <p className="font-bold text-gray-900 dark:text-white text-sm leading-snug">{s.name}</p>
-                    {s.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed">{s.description}</p>}
-                  </div>
-                  <div className={`mt-auto flex items-center gap-1 text-xs font-semibold ${
-                    color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
-                    color === 'purple' ? 'text-purple-600 dark:text-purple-400' :
-                    color === 'orange' ? 'text-orange-600 dark:text-orange-400' :
-                    'text-emerald-600 dark:text-emerald-400'
-                  }`}>
-                    <Play className="h-3 w-3" /> Start Session
-                  </div>
-                </button>
-              );
-            })}
+          <div className="flex flex-col gap-6">
+            {Object.entries(groupedScenarios).map(([category, items]) => (
+              <div key={category} className="flex flex-col gap-3">
+                <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{category}</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {items.map((s) => {
+                    const color = s.tagColor ?? 'blue';
+                    const isHNI = s.id === 'groww_discovery_call';
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => router.push(`/session?scenario=${s.id}`)}
+                        className={`relative p-5 border-2 border-gray-200 dark:border-slate-700 rounded-2xl transition-all text-left group flex flex-col gap-3 ${BORDER_HOVER[color]} ${isHNI ? 'ring-1 ring-emerald-200 dark:ring-emerald-800' : ''}`}
+                      >
+                        {isHNI && (
+                          <span className="absolute top-3 right-3 text-[10px] font-bold px-1.5 py-0.5 bg-emerald-600 text-white rounded-full uppercase tracking-wide">New</span>
+                        )}
+                        <div className={`h-11 w-11 rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform ${
+                          color === 'blue' ? 'bg-blue-50 dark:bg-blue-900/30' :
+                          color === 'purple' ? 'bg-purple-50 dark:bg-purple-900/30' :
+                          color === 'orange' ? 'bg-orange-50 dark:bg-orange-900/30' :
+                          'bg-emerald-50 dark:bg-emerald-900/30'
+                        }`}>
+                          {getIconForScenario(s.id, s.category)}
+                        </div>
+                        {s.tag && (
+                          <span className={`self-start text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TAG_STYLES[color]}`}>
+                            {s.tag}
+                          </span>
+                        )}
+                        <div>
+                          <p className="font-bold text-gray-900 dark:text-white text-sm leading-snug">{s.name}</p>
+                          {s.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2">{s.description}</p>}
+                        </div>
+                        <div className={`mt-auto flex items-center gap-1 text-xs font-semibold ${
+                          color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
+                          color === 'purple' ? 'text-purple-600 dark:text-purple-400' :
+                          color === 'orange' ? 'text-orange-600 dark:text-orange-400' :
+                          'text-emerald-600 dark:text-emerald-400'
+                        }`}>
+                          <Play className="h-3 w-3" /> Start Session
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -246,20 +263,18 @@ export default function DashboardPage() {
                         ? 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-400/10'
                         : 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-400/10';
 
-                      const LABELS: Record<string, string> = {
-                        cold_call: 'Cold Call', product_demo: 'Product Demo',
-                        objection_handling: 'Objection Handling', groww_discovery_call: 'Groww HNI Discovery',
-                      };
+                      const scenarioInfo = scenarios.find(scn => scn.id === s.scenario_type);
+                      const scenarioName = scenarioInfo ? scenarioInfo.name : s.scenario_type;
 
                       return (
                         <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors group">
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
                               <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                                {SCENARIO_ICONS[s.scenario_type] ?? <Play className="h-3.5 w-3.5" />}
+                                {getIconForScenario(s.scenario_type, scenarioInfo?.category, "h-3.5 w-3.5")}
                               </div>
                               <span className="text-sm font-medium text-gray-900 dark:text-slate-200">
-                                {LABELS[s.scenario_type] || s.scenario_type}
+                                {scenarioName}
                               </span>
                             </div>
                           </td>

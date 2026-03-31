@@ -45,7 +45,7 @@ export const authApi = {
 
 // Sessions
 export const sessionsApi = {
-  scenarios: () => api.get('/api/sessions/scenarios'),
+  scenarios: () => api.get(`/api/sessions/scenarios?t=${Date.now()}`),
   list: (page = 1, limit = 10) =>
     api.get(`/api/sessions?page=${page}&limit=${limit}`),
   get: (id: string) => api.get(`/api/sessions/${id}`),

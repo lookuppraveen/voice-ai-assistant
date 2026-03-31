@@ -55,7 +55,14 @@ function SessionContent() {
   const doTurn = useCallback(async () => {
     try {
       const transcript = await audio.startListening();
-      if (!transcript) return;
+      if (!transcript) {
+        // If the mic stopped because of no-speech timeout but Auto-listen is still ON,
+        // we restart the listener after a tiny delay so it doesn't get stuck.
+        if (autoListenRef.current && !stopLoopRef.current) {
+          setTimeout(doTurn, 250);
+        }
+        return;
+      }
 
       const aiText = await session.sendTurn(transcript);
       if (!aiText) return;
@@ -69,8 +76,11 @@ function SessionContent() {
       if (autoListenRef.current && !stopLoopRef.current) {
         doTurn();
       }
-    } catch {
-      // errors shown via audio.error / session.error
+    } catch (e) {
+      // If a mic error happens, try to gracefully recover so auto-listen doesn't die forever
+      if (autoListenRef.current && !stopLoopRef.current) {
+        setTimeout(doTurn, 1000);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [audio, session, responseDelay]);

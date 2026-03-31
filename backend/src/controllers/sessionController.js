@@ -5,6 +5,7 @@ const { transcribeAudio } = require('../services/whisperService');
 
 // GET /api/scenarios
 const listScenarios = (req, res) => {
+  res.set('Cache-Control', 'no-store, max-age=0');
   res.json({ scenarios: getScenarios() });
 };
 

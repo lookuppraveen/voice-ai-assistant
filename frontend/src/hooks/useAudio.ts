@@ -9,6 +9,7 @@ export const useAudio = () => {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const resolveRef = useRef<((text: string) => void) | null>(null);
   const rejectRef = useRef<((e: Error) => void) | null>(null);
 
@@ -41,8 +42,14 @@ export const useAudio = () => {
 
       const recognition = new SpeechRecognition();
       recognitionRef.current = recognition;
-      resolveRef.current = resolve;
-      rejectRef.current = reject;
+      
+      let promiseSettled = false;
+      const safeResolve = (val: string) => {
+        if (!promiseSettled) { promiseSettled = true; resolve(val); }
+      };
+      const safeReject = (val: Error) => {
+        if (!promiseSettled) { promiseSettled = true; reject(val); }
+      };
 
       recognition.lang = 'en-US';
       recognition.interimResults = false;
@@ -54,26 +61,39 @@ export const useAudio = () => {
       recognition.onresult = (event: any) => {
         const transcript = event.results[0][0].transcript.trim();
         setListenState('processing');
-        resolve(transcript);
+        safeResolve(transcript);
       };
 
       recognition.onerror = (event: any) => {
         setListenState('idle');
+        if (event.error === 'no-speech') {
+          // If the user didn't speak in time, safely resolve empty instead of rejecting.
+          // This allows the caller to loop/restart if auto-listen is active without breaking.
+          safeResolve('');
+          return;
+        }
+        
         const msg =
           event.error === 'not-allowed'
             ? 'Microphone permission denied. Please allow access in your browser.'
-            : event.error === 'no-speech'
-            ? 'No speech detected. Please try speaking again.'
             : `Speech recognition error: ${event.error}`;
         setError(msg);
-        reject(new Error(msg));
+        safeReject(new Error(msg));
       };
 
       recognition.onend = () => {
         setListenState('idle');
+        safeResolve(''); // Ensure it always resolves if it stops magically
       };
 
-      recognition.start();
+      try {
+        recognition.start();
+      } catch (err: any) {
+        setListenState('idle');
+        const msg = `Failed to start microphone: ${err.message || 'Unknown error'}`;
+        setError(msg);
+        safeReject(new Error(msg));
+      }
     });
   }, []);
 
@@ -93,6 +113,7 @@ export const useAudio = () => {
       window.speechSynthesis.cancel();
 
       const utterance = new SpeechSynthesisUtterance(text);
+      utteranceRef.current = utterance; // Prevent garbage collection bug in Chrome
 
       const voices = window.speechSynthesis.getVoices();
       const preferred =
@@ -107,8 +128,8 @@ export const useAudio = () => {
       utterance.volume = 1.0;
 
       utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => { setIsSpeaking(false); resolve(); };
-      utterance.onerror = () => { setIsSpeaking(false); resolve(); };
+      utterance.onend = () => { setIsSpeaking(false); utteranceRef.current = null; resolve(); };
+      utterance.onerror = () => { setIsSpeaking(false); utteranceRef.current = null; resolve(); };
 
       window.speechSynthesis.speak(utterance);
     });

@@ -78,6 +78,7 @@ export interface Scenario {
   description?: string;
   tag?: string;
   tagColor?: string;
+  category?: string;
 }
 
 export interface AdminStats {
