@@ -25,6 +25,7 @@ export interface ScoreBreakdown {
 export interface Session {
   id: string;
   user_id: string;
+  topic_id?: string;
   scenario_type: string;
   status: 'in_progress' | 'completed' | 'abandoned';
   score?: number;
@@ -81,10 +82,21 @@ export interface Scenario {
   category?: string;
 }
 
+export interface Topic {
+  id: string;
+  name: string;
+  description?: string;
+  system_prompt: string;
+  created_at: string;
+  tag?: string;
+  tagColor?: string;
+}
+
 export interface AdminStats {
   total_candidates: number;
   total_sessions: number;
   average_score: number;
+  total_topics?: number;
 }
 
 export interface CandidateWithStats extends User {

@@ -8,16 +8,44 @@ interface CandidateTableProps {
   candidates: CandidateWithStats[];
   onToggleStatus: (id: string) => void;
   onViewSessions?: (id: string) => void;
+  selectedIds?: string[];
+  onSelectionChange?: (ids: string[]) => void;
 }
 
-export const CandidateTable = ({ candidates, onToggleStatus, onViewSessions }: CandidateTableProps) => {
+export const CandidateTable = ({ candidates, onToggleStatus, onViewSessions, selectedIds = [], onSelectionChange }: CandidateTableProps) => {
   const router = useRouter();
+
+  const toggleOne = (id: string) => {
+    if (!onSelectionChange) return;
+    if (selectedIds.includes(id)) {
+      onSelectionChange(selectedIds.filter((x) => x !== id));
+    } else {
+      onSelectionChange([...selectedIds, id]);
+    }
+  };
+
+  const toggleAll = () => {
+    if (!onSelectionChange) return;
+    if (selectedIds.length === candidates.length) {
+      onSelectionChange([]);
+    } else {
+      onSelectionChange(candidates.map((c) => c.id));
+    }
+  };
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full">
         <thead>
           <tr className="border-b border-gray-200 dark:border-slate-800">
+            <th className="px-6 py-3 bg-gray-50 dark:bg-slate-800/50">
+              <input
+                type="checkbox"
+                checked={candidates.length > 0 && selectedIds.length === candidates.length}
+                onChange={toggleAll}
+                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+              />
+            </th>
             {['Candidate', 'Department', 'Sessions', 'Avg Score', 'Status', 'Actions'].map((h) => (
               <th
                 key={h}
@@ -40,7 +68,15 @@ export const CandidateTable = ({ candidates, onToggleStatus, onViewSessions }: C
               : 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-400/10';
 
             return (
-              <tr key={c.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors group">
+              <tr key={c.id} className={`hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors group ${selectedIds.includes(c.id) ? 'bg-indigo-50/30 dark:bg-indigo-500/5' : ''}`}>
+                <td className="px-6 py-4">
+                  <input
+                    type="checkbox"
+                    checked={selectedIds.includes(c.id)}
+                    onChange={() => toggleOne(c.id)}
+                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                  />
+                </td>
                 {/* Candidate */}
                 <td className="px-6 py-4">
                   <div className="flex items-center gap-3">

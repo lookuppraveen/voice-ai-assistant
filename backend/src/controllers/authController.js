@@ -4,8 +4,8 @@ const { validationResult } = require('express-validator');
 const { query } = require('../config/database');
 const env = require('../config/env');
 
-const generateToken = (userId) =>
-  jwt.sign({ userId }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
+const generateToken = (user) =>
+  jwt.sign({ userId: user.id, companyId: user.company_id, role: user.role }, env.jwt.secret, { expiresIn: env.jwt.expiresIn });
 
 const register = async (req, res, next) => {
   try {
@@ -23,15 +23,19 @@ const register = async (req, res, next) => {
 
     const password_hash = await bcrypt.hash(password, 12);
 
+    // Ensure they fall into test company if no company ID provided
+    const defaultCompanyId = '00000000-0000-0000-0000-000000000000';
+    const companyId = req.body.company_id || defaultCompanyId;
+
     const result = await query(
-      `INSERT INTO users (email, password_hash, full_name, role, department)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, email, full_name, role, department, created_at`,
-      [email.toLowerCase(), password_hash, full_name, role, department || null]
+      `INSERT INTO users (company_id, email, password_hash, full_name, role, department)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, company_id, email, full_name, role, department, created_at`,
+      [companyId, email.toLowerCase(), password_hash, full_name, role, department || null]
     );
 
     const user = result.rows[0];
-    const token = generateToken(user.id);
+    const token = generateToken(user);
 
     res.status(201).json({ user, token });
   } catch (err) {
@@ -49,7 +53,7 @@ const login = async (req, res, next) => {
     const { email, password } = req.body;
 
     const result = await query(
-      'SELECT id, email, password_hash, full_name, role, department, is_active FROM users WHERE email = $1',
+      'SELECT id, company_id, email, password_hash, full_name, role, department, is_active FROM users WHERE email = $1',
       [email.toLowerCase()]
     );
 
@@ -60,7 +64,7 @@ const login = async (req, res, next) => {
     const user = result.rows[0];
 
     if (!user.is_active) {
-      return res.status(403).json({ error: 'Account is deactivated' });
+      return res.status(403).json({ error: 'Account has been deactivated by the administrator.' });
     }
 
     const isValid = await bcrypt.compare(password, user.password_hash);
@@ -69,7 +73,7 @@ const login = async (req, res, next) => {
     }
 
     const { password_hash, ...safeUser } = user;
-    const token = generateToken(user.id);
+    const token = generateToken(user);
 
     res.json({ user: safeUser, token });
   } catch (err) {
@@ -100,7 +104,7 @@ const updateProfile = async (req, res, next) => {
            avatar     = COALESCE($5, avatar),
            updated_at = NOW()
        WHERE id = $6
-       RETURNING id, email, full_name, role, department, phone, bio, avatar, is_active, created_at`,
+       RETURNING id, company_id, email, full_name, role, department, phone, bio, avatar, is_active, created_at`,
       [full_name || null, department || null, phone || null, bio || null, avatar || null, userId]
     );
 

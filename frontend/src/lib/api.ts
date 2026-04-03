@@ -34,8 +34,10 @@ api.interceptors.response.use(
 
 // Auth
 export const authApi = {
-  register: (data: { email: string; password: string; full_name: string; role?: string; department?: string }) =>
+  register: (data: { email: string; password: string; full_name: string; role?: string; department?: string; company_id?: string }) =>
     api.post('/api/auth/register', data),
+  registerCompany: (data: { company_name: string; admin_email: string; admin_password: string; admin_name: string }) =>
+    api.post('/api/auth/register-company', data),
   login: (data: { email: string; password: string }) =>
     api.post('/api/auth/login', data),
   me: () => api.get('/api/auth/me'),
@@ -45,25 +47,32 @@ export const authApi = {
 
 // Sessions
 export const sessionsApi = {
-  scenarios: () => api.get(`/api/sessions/scenarios?t=${Date.now()}`),
   list: (page = 1, limit = 10) =>
     api.get(`/api/sessions?page=${page}&limit=${limit}`),
   get: (id: string) => api.get(`/api/sessions/${id}`),
-  start: (scenario_type: string) =>
-    api.post('/api/sessions', { scenario_type }),
+  start: (topic_id: string) =>
+    api.post('/api/sessions', { topic_id }),
   sendTextTurn: (sessionId: string, text: string) =>
     api.post(`/api/sessions/${sessionId}/text-turn`, { text }),
   sendAudioTurn: (sessionId: string, audioBlob: Blob) => {
     const formData = new FormData();
     formData.append('audio', audioBlob, 'turn.webm');
-    return api.post(`/api/sessions/${sessionId}/turn`, formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
+    return api.post(`/api/sessions/${sessionId}/turn`, formData);
   },
   getTTSAudio: (text: string) =>
     api.post('/api/sessions/tts', { text }, { responseType: 'blob' }),
   complete: (sessionId: string) =>
     api.post(`/api/sessions/${sessionId}/complete`),
+};
+
+// Topics
+export const topicsApi = {
+  list: () => api.get('/api/topics'),
+  create: (data: { name: string; description: string; system_prompt: string }) =>
+    api.post('/api/topics', data),
+  update: (id: string, data: { name?: string; description?: string; system_prompt?: string }) =>
+    api.put(`/api/topics/${id}`, data),
+  delete: (id: string) => api.delete(`/api/topics/${id}`),
 };
 
 // Admin
@@ -81,6 +90,25 @@ export const adminApi = {
     api.get(`/api/admin/users?search=${encodeURIComponent(search)}`),
   updateUserRole: (id: string, role: string) =>
     api.patch(`/api/admin/users/${id}/role`, { role }),
+  skillsReport: () => api.get('/api/admin/reports/skills'),
+  trendsReport: () => api.get('/api/admin/reports/trends'),
+  comparisonReport: (ids: string[]) => api.get(`/api/admin/reports/compare?ids=${ids.join(',')}`),
+  candidateRecommendations: (id: string) => api.get(`/api/admin/candidates/${id}/recommendations`),
+};
+
+// Company
+export const companyApi = {
+  listUsers: () => api.get('/api/company/users'),
+  inviteUser: (data: any) => api.post('/api/company/users', data),
+  toggleUserStatus: (id: string, is_active: boolean) => api.put(`/api/company/users/${id}/status`, { is_active })
+};
+
+// Super Admin
+export const superAdminApi = {
+  getGlobalDashboard: () => api.get('/api/super-admin/companies'),
+  getCompanyAudits: (id: string) => api.get(`/api/super-admin/companies/${id}/users`),
+  getSettings: () => api.get('/api/super-admin/settings'),
+  updateSetting: (key: string, value: string) => api.patch('/api/super-admin/settings', { key, value })
 };
 
 export default api;

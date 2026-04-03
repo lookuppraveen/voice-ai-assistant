@@ -31,9 +31,10 @@ const transcribeAudio = async (audioBuffer, mimeType = 'audio/webm', filename = 
   );
 
   const text = response.data.text?.trim();
-  if (!text) throw new Error('No transcription returned from Whisper');
 
-  return text;
+  // If whisper returns empty text (e.g., silence was recorded), handle it gracefully
+  // by passing a simulated "no response" marker to the AI to prompt the user
+  return text || "*(Candidate remained silent)*";
 };
 
 module.exports = { transcribeAudio };

@@ -21,7 +21,7 @@ const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 function SessionContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const scenarioType = searchParams.get('scenario') || 'cold_call';
+  const topicId = searchParams.get('topic_id') || '';
 
   const session = useSession();
   const audio   = useAudio();
@@ -66,7 +66,12 @@ function SessionContent() {
       }
 
       const aiText = await session.sendAudioTurn(audioBlob);
-      if (!aiText) return;
+      if (!aiText) {
+        if (autoListenRef.current && !stopLoopRef.current) {
+          setTimeout(doTurn, 3000);
+        }
+        return;
+      }
 
       // Apply response delay with countdown
       if (responseDelay > 0) await runCountdown(responseDelay);
@@ -89,7 +94,7 @@ function SessionContent() {
   // ── Start session ────────────────────────────────────────────────────────────
   const handleStart = useCallback(async () => {
     stopLoopRef.current = false;
-    const openingText = await session.startSession(scenarioType);
+    const openingText = await session.startSession(topicId);
     if (openingText) {
       if (responseDelay > 0) await runCountdown(responseDelay);
       await audio.speakText(openingText);
@@ -97,7 +102,7 @@ function SessionContent() {
       if (autoListenRef.current) doTurn();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, audio, scenarioType, responseDelay]);
+  }, [session, audio, topicId, responseDelay]);
 
   const handleManualListen = useCallback(() => {
     stopLoopRef.current = false;
@@ -130,11 +135,11 @@ function SessionContent() {
           </div>
         </nav>
         <main className="max-w-4xl mx-auto px-4 md:px-6 py-8">
-          <ScoreCard
-            evaluation={session.evaluation}
-            messages={session.messages}
-            scenarioType={scenarioType}
-          />
+            <ScoreCard
+              evaluation={session.evaluation}
+              messages={session.messages}
+              scenarioType="Custom Topic"
+            />
         </main>
       </div>
     );
@@ -157,7 +162,7 @@ function SessionContent() {
 
         <div className="text-center">
           <p className="text-white font-semibold capitalize">
-            {scenarioType.replace(/_/g, ' ')}
+            Custom Session
           </p>
           <p className="text-gray-400 text-xs">{session.messages.length} turns</p>
         </div>

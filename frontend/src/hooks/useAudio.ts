@@ -50,9 +50,8 @@ export const useAudio = () => {
 
         mediaRecorder.onstop = () => {
           cleanup();
-          setListenState('processing');
+          setListenState('idle');
           if (audioChunks.length === 0) {
-            setListenState('idle');
             resolve(null);
             return;
           }

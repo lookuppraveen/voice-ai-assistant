@@ -64,6 +64,9 @@ app.get('/health', (req, res) => {
 
 // Routes
 app.use('/api/auth', authLimiter, require('./routes/auth'));
+app.use('/api/super-admin', apiLimiter, require('./routes/superAdmin'));
+app.use('/api/company', apiLimiter, require('./routes/company'));
+app.use('/api/topics', apiLimiter, require('./routes/topics'));
 app.use('/api/sessions', apiLimiter, require('./routes/sessions'));
 app.use('/api/admin', apiLimiter, require('./routes/admin'));
 

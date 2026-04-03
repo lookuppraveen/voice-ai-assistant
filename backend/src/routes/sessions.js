@@ -2,7 +2,6 @@ const router = require('express').Router();
 const multer = require('multer');
 const { authenticate } = require('../middleware/auth');
 const {
-  listScenarios,
   startSession,
   processTurn,
   processTextTurn,
@@ -28,7 +27,6 @@ const upload = multer({
 
 router.use(authenticate);
 
-router.get('/scenarios', listScenarios);
 router.get('/', listSessions);
 router.post('/', startSession);
 router.get('/:id', getSession);

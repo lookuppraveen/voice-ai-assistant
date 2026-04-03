@@ -1,7 +1,8 @@
 const { query } = require('../config/database');
-const { getAIResponse, evaluateSession, getScenarios } = require('../services/claudeService');
+const { getAIResponse, evaluateSession } = require('../services/claudeService');
 const { transcribeAudio } = require('../services/whisperService');
-const { generateAudio } = require('../services/elevenLabsService');
+const elevenLabs = require('../services/elevenLabsService');
+const openaiTts = require('../services/openaiTtsService');
 
 // GET /api/scenarios
 const listScenarios = (req, res) => {
@@ -12,25 +13,25 @@ const listScenarios = (req, res) => {
 // POST /api/sessions — Start new session
 const startSession = async (req, res, next) => {
   try {
-    const { scenario_type = 'cold_call' } = req.body;
+    const { topic_id } = req.body;
+
+    const topicResult = await query('SELECT * FROM topics WHERE id = $1', [topic_id]);
+    if (topicResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found' });
+    }
+    const topic = topicResult.rows[0];
 
     const result = await query(
-      `INSERT INTO sessions (user_id, scenario_type, status)
-       VALUES ($1, $2, 'in_progress')
-       RETURNING id, user_id, scenario_type, status, started_at`,
-      [req.user.id, scenario_type]
+      `INSERT INTO sessions (user_id, topic_id, scenario_type, status)
+       VALUES ($1, $2, $3, 'in_progress')
+       RETURNING id, user_id, topic_id, scenario_type, status, started_at`,
+      [req.user.id, topic.id, topic.name]
     );
 
     const session = result.rows[0];
 
     // Insert opening AI message
-    const openingMessages = {
-      cold_call: "Hello?",
-      product_demo: "Hi, thanks for calling. I was just reviewing the demo notes. Go ahead.",
-      objection_handling: "Yes, I have a few minutes. What's this about?",
-    };
-
-    const openingText = openingMessages[scenario_type] || "Hello?";
+    const openingText = "Hello? How can I help you today?";
 
     await query(
       `INSERT INTO messages (session_id, role, content, turn_number)
@@ -54,7 +55,10 @@ const processTurn = async (req, res, next) => {
 
     // Validate session belongs to user
     const sessionResult = await query(
-      `SELECT * FROM sessions WHERE id = $1 AND user_id = $2 AND status = 'in_progress'`,
+      `SELECT s.*, t.system_prompt, t.name as topic_name 
+       FROM sessions s 
+       JOIN topics t ON s.topic_id = t.id 
+       WHERE s.id = $1 AND s.user_id = $2 AND s.status = 'in_progress'`,
       [sessionId, req.user.id]
     );
 
@@ -95,8 +99,7 @@ const processTurn = async (req, res, next) => {
       [sessionId]
     );
 
-    // Get AI response
-    const aiText = await getAIResponse(historyResult.rows, session.scenario_type);
+    const aiText = await getAIResponse(historyResult.rows, session.system_prompt);
 
     // Save AI message
     await query(
@@ -126,7 +129,10 @@ const processTextTurn = async (req, res, next) => {
     }
 
     const sessionResult = await query(
-      `SELECT * FROM sessions WHERE id = $1 AND user_id = $2 AND status = 'in_progress'`,
+      `SELECT s.*, t.system_prompt, t.name as topic_name 
+       FROM sessions s 
+       JOIN topics t ON s.topic_id = t.id 
+       WHERE s.id = $1 AND s.user_id = $2 AND s.status = 'in_progress'`,
       [sessionId, req.user.id]
     );
 
@@ -153,7 +159,7 @@ const processTextTurn = async (req, res, next) => {
       [sessionId]
     );
 
-    const aiText = await getAIResponse(historyResult.rows, session.scenario_type);
+    const aiText = await getAIResponse(historyResult.rows, session.system_prompt);
 
     await query(
       `INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'assistant', $2, $3)`,
@@ -176,7 +182,10 @@ const completeSession = async (req, res, next) => {
     const { id: sessionId } = req.params;
 
     const sessionResult = await query(
-      `SELECT * FROM sessions WHERE id = $1 AND user_id = $2 AND status = 'in_progress'`,
+      `SELECT s.*, t.name as topic_name 
+       FROM sessions s 
+       JOIN topics t ON s.topic_id = t.id 
+       WHERE s.id = $1 AND s.user_id = $2 AND s.status = 'in_progress'`,
       [sessionId, req.user.id]
     );
 
@@ -196,8 +205,7 @@ const completeSession = async (req, res, next) => {
       return res.status(400).json({ error: 'Session too short to evaluate (minimum 3 turns)' });
     }
 
-    // Evaluate with Claude
-    const evaluation = await evaluateSession(historyResult.rows, session.scenario_type);
+    const evaluation = await evaluateSession(historyResult.rows, session.topic_name);
 
     // Calculate duration
     const durationResult = await query(
@@ -323,7 +331,7 @@ const getSession = async (req, res, next) => {
   }
 };
 
-// POST /api/sessions/tts — Generate speech using ElevenLabs
+// POST /api/sessions/tts — Generate speech using selected provider
 const generateTTS = async (req, res, next) => {
   try {
     const { text } = req.body;
@@ -331,7 +339,17 @@ const generateTTS = async (req, res, next) => {
       return res.status(400).json({ error: 'Text required for TTS' });
     }
     
-    const audioBuffer = await generateAudio(text);
+    // Check provider setting
+    const settingRes = await query(`SELECT setting_value FROM system_settings WHERE setting_key = 'tts_provider'`);
+    const provider = settingRes.rows.length > 0 ? settingRes.rows[0].setting_value : 'elevenlabs';
+
+    let audioBuffer;
+    if (provider === 'openai') {
+      audioBuffer = await openaiTts.generateAudio(text);
+    } else {
+      audioBuffer = await elevenLabs.generateAudio(text);
+    }
+
     if (!audioBuffer) {
       return res.status(500).json({ error: 'Audio generation failed' });
     }
@@ -348,7 +366,6 @@ const generateTTS = async (req, res, next) => {
 };
 
 module.exports = {
-  listScenarios,
   startSession,
   processTurn,
   processTextTurn,

@@ -23,7 +23,13 @@ export default function LoginPage() {
       const res = await authApi.login(form);
       setAuth(res.data.token, res.data.user);
       const role = res.data.user.role;
-      router.push(role === 'candidate' ? '/dashboard' : '/admin');
+      if (role === 'system_admin') {
+        router.push('/super-admin');
+      } else if (role === 'candidate') {
+        router.push('/dashboard');
+      } else {
+        router.push('/admin');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Login failed');
     } finally {
@@ -81,6 +87,12 @@ export default function LoginPage() {
             Don&apos;t have an account?{' '}
             <Link href="/register" className="text-blue-600 hover:underline font-medium">
               Register
+            </Link>
+          </p>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Registering a new organization?{' '}
+            <Link href="/register-company" className="text-indigo-600 hover:underline font-medium">
+              Create Company
             </Link>
           </p>
         </Card>

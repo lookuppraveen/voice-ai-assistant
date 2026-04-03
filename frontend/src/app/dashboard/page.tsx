@@ -2,9 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { sessionsApi } from '@/lib/api';
+import { sessionsApi, topicsApi } from '@/lib/api';
 import { clearAuth, getStoredUser } from '@/lib/auth';
-import { SessionWithBreakdown, User, Scenario } from '@/types';
+import { SessionWithBreakdown, User, Topic } from '@/types';
 import { Card, CardHeader, CardTitle } from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
@@ -45,7 +45,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [sessions, setSessions] = useState<SessionWithBreakdown[]>([]);
-  const [scenarios, setScenarios] = useState<Scenario[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [loading, setLoading] = useState(true);
   const [sessionPage, setSessionPage] = useState(1);
 
@@ -55,10 +55,10 @@ export default function DashboardPage() {
     if (stored.role !== 'candidate') { router.push('/admin'); return; }
     setUser(stored);
 
-    Promise.all([sessionsApi.list(1, 100), sessionsApi.scenarios()])
-      .then(([sessRes, scenRes]) => {
+    Promise.all([sessionsApi.list(1, 100), topicsApi.list()])
+      .then(([sessRes, topicsRes]) => {
         setSessions(sessRes.data.sessions);
-        setScenarios(scenRes.data.scenarios);
+        setTopics(topicsRes.data.topics || []);
       })
       .finally(() => setLoading(false));
   }, [router]);
@@ -75,13 +75,13 @@ export default function DashboardPage() {
   const totalPages = Math.ceil(sessions.length / SESSIONS_PER_PAGE);
   const pagedSessions = sessions.slice((sessionPage - 1) * SESSIONS_PER_PAGE, sessionPage * SESSIONS_PER_PAGE);
 
-  // Group scenarios
-  const groupedScenarios = scenarios.reduce((acc, scenario) => {
-    const cat = scenario.category || 'Other';
+  // Group topics
+  const groupedTopics = topics.reduce((acc: any, topic: any) => {
+    const cat = topic.category || 'General';
     if (!acc[cat]) acc[cat] = [];
-    acc[cat].push(scenario);
+    acc[cat].push(topic);
     return acc;
-  }, {} as Record<string, Scenario[]>);
+  }, {});
 
   if (loading) {
     return (
@@ -170,17 +170,17 @@ export default function DashboardPage() {
           <p className="text-sm text-gray-500 dark:text-slate-400 mb-5">Choose a scenario topic to practice</p>
 
           <div className="flex flex-col gap-6">
-            {Object.entries(groupedScenarios).map(([category, items]) => (
+            {Object.entries(groupedTopics).map(([category, items]) => (
               <div key={category} className="flex flex-col gap-3">
                 <h3 className="text-xs font-bold text-gray-400 dark:text-slate-500 uppercase tracking-wider">{category}</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {items.map((s) => {
-                    const color = s.tagColor ?? 'blue';
-                    const isHNI = s.id === 'groww_discovery_call';
+                  {(items as any[]).map((t: any) => {
+                    const color = t.tagColor ?? 'blue';
+                    const isHNI = t.id === 'groww_discovery_call';
                     return (
                       <button
-                        key={s.id}
-                        onClick={() => router.push(`/session?scenario=${s.id}`)}
+                        key={t.id}
+                        onClick={() => router.push(`/session?topic_id=${t.id}`)}
                         className={`relative p-5 border-2 border-gray-200 dark:border-slate-700 rounded-2xl transition-all text-left group flex flex-col gap-3 ${BORDER_HOVER[color]} ${isHNI ? 'ring-1 ring-emerald-200 dark:ring-emerald-800' : ''}`}
                       >
                         {isHNI && (
@@ -192,16 +192,14 @@ export default function DashboardPage() {
                           color === 'orange' ? 'bg-orange-50 dark:bg-orange-900/30' :
                           'bg-emerald-50 dark:bg-emerald-900/30'
                         }`}>
-                          {getIconForScenario(s.id, s.category)}
+                          {getIconForScenario(t.id, t.category, "h-6 w-6 text-indigo-500")}
                         </div>
-                        {s.tag && (
-                          <span className={`self-start text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TAG_STYLES[color]}`}>
-                            {s.tag}
-                          </span>
-                        )}
+                        <span className={`self-start text-[11px] font-semibold px-2 py-0.5 rounded-full border ${TAG_STYLES[color]}`}>
+                          {t.category || 'General'}
+                        </span>
                         <div>
-                          <p className="font-bold text-gray-900 dark:text-white text-sm leading-snug">{s.name}</p>
-                          {s.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2">{s.description}</p>}
+                          <p className="font-bold text-gray-900 dark:text-white text-sm leading-snug">{t.name}</p>
+                          {t.description && <p className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-relaxed line-clamp-2">{t.description}</p>}
                         </div>
                         <div className={`mt-auto flex items-center gap-1 text-xs font-semibold ${
                           color === 'blue' ? 'text-blue-600 dark:text-blue-400' :
@@ -263,18 +261,18 @@ export default function DashboardPage() {
                         ? 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-400/10'
                         : 'text-red-700 dark:text-red-400 bg-red-50 dark:bg-red-400/10';
 
-                      const scenarioInfo = scenarios.find(scn => scn.id === s.scenario_type);
-                      const scenarioName = scenarioInfo ? scenarioInfo.name : s.scenario_type;
+                      const topicInfo = topics.find(t => t.id === s.topic_id);
+                      const topicName = topicInfo ? topicInfo.name : s.scenario_type;
 
                       return (
                         <tr key={s.id} className="hover:bg-gray-50 dark:hover:bg-slate-800/40 transition-colors group">
                           <td className="px-5 py-3.5">
                             <div className="flex items-center gap-2">
                               <div className="h-7 w-7 rounded-lg bg-gray-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                                {getIconForScenario(s.scenario_type, scenarioInfo?.category, "h-3.5 w-3.5")}
+                                {getIconForScenario(s.scenario_type, 'Custom', "h-3.5 w-3.5")}
                               </div>
                               <span className="text-sm font-medium text-gray-900 dark:text-slate-200">
-                                {scenarioName}
+                                {topicName}
                               </span>
                             </div>
                           </td>

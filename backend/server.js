@@ -5,6 +5,27 @@ const { pool } = require('./src/config/database');
 const server = app.listen(env.port, async () => {
   try {
     await pool.query('SELECT 1');
+    try {
+      await pool.query('ALTER TABLE users ADD COLUMN temp_password VARCHAR(255)');
+    } catch(e) {} // Ignore if column already exists
+
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS system_settings (
+          setting_key VARCHAR(50) PRIMARY KEY,
+          setting_value VARCHAR(255) NOT NULL,
+          updated_at TIMESTAMP DEFAULT NOW()
+        )
+      `);
+      await pool.query(`
+        INSERT INTO system_settings (setting_key, setting_value) 
+        VALUES ('tts_provider', 'elevenlabs') 
+        ON CONFLICT (setting_key) DO NOTHING
+      `);
+    } catch(e) {
+      console.error('Failed to create system_settings:', e.message);
+    }
+
     console.log(`Database connected successfully`);
     console.log(`Server running on http://localhost:${env.port} [${env.nodeEnv}]`);
   } catch (err) {
