@@ -147,8 +147,10 @@ function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onCl
     try {
       const res = await topicsApi.generatePrompt({ name: form.name, description: form.description });
       setForm(prev => ({ ...prev, system_prompt: res.data.system_prompt }));
-    } catch {
-      setError('AI generation failed');
+    } catch (err: any) {
+      console.error('AI Generation Error:', err);
+      const msg = err.response?.data?.error || err.message || 'AI generation failed';
+      setError(msg);
     } finally {
       setIsGenerating(false);
     }
@@ -185,7 +187,8 @@ function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onCl
               type="text" 
               value={form.name} 
               onChange={e => setForm({...form, name: e.target.value})} 
-              className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+              className="w-full border border-gray-200 rounded-lg p-2 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-300" 
+              placeholder="e.g., Creative Objection Handling"
             />
           </div>
           <div>
@@ -194,7 +197,8 @@ function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onCl
               type="text" 
               value={form.description} 
               onChange={e => setForm({...form, description: e.target.value})} 
-              className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+              className="w-full border border-gray-200 rounded-lg p-2 text-sm text-gray-900 bg-white focus:ring-2 focus:ring-indigo-500 outline-none placeholder:text-gray-300" 
+              placeholder="A brief summary of the scenario"
             />
           </div>
           <div>
@@ -213,7 +217,7 @@ function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onCl
               rows={8} 
               value={form.system_prompt} 
               onChange={e => setForm({...form, system_prompt: e.target.value})} 
-              className="w-full border border-gray-200 rounded-lg p-3 text-xs font-mono bg-gray-50 focus:bg-white transition-colors outline-none" 
+              className="w-full border border-gray-200 rounded-lg p-3 text-xs font-mono text-gray-900 bg-gray-50 focus:bg-white transition-colors outline-none" 
             />
             <p className="text-[10px] text-gray-400 mt-1 italic">The prompt defines how the AI will act during the call.</p>
           </div>

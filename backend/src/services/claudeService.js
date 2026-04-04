@@ -16,7 +16,7 @@ const getAIResponse = async (conversationHistory, systemPrompt) => {
     const messages = buildConversationMessages(conversationHistory);
 
     const response = await client.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-haiku-20240307', // Most universally compatible model
       max_tokens: 300,
       system: systemPrompt,
       messages,
@@ -65,7 +65,7 @@ Evaluate this sales call and provide a structured JSON response with exactly thi
 Be specific, honest, and constructive. Base scores strictly on the actual conversation.`;
 
     const response = await client.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 1500,
       messages: [{ role: 'user', content: evaluationPrompt }],
     });
@@ -100,7 +100,7 @@ const generateTopicPrompt = async (name, description) => {
     Output ONLY the system prompt text. No introductory remarks.`;
 
     const response = await client.messages.create({
-      model: 'claude-3-5-sonnet-20240620',
+      model: 'claude-3-haiku-20240307',
       max_tokens: 1000,
       messages: [{ role: 'user', content: prompt }],
     });

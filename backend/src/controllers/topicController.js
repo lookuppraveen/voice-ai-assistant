@@ -131,6 +131,7 @@ const generateAiPrompt = async (req, res, next) => {
     const prompt = await generateTopicPrompt(name, description);
     res.json({ system_prompt: prompt });
   } catch (err) {
+    console.error('Topic Prompt Generation Error:', err.message);
     next(err);
   }
 };
