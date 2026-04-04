@@ -43,6 +43,8 @@ export const authApi = {
   me: () => api.get('/api/auth/me'),
   updateProfile: (data: { full_name?: string; department?: string; phone?: string; bio?: string; avatar?: string }) =>
     api.put('/api/auth/profile', data),
+  changePassword: (data: { currentPassword: string; newPassword: string }) =>
+    api.put('/api/auth/change-password', data),
 };
 
 // Sessions

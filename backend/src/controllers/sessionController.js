@@ -356,8 +356,10 @@ const generateTTS = async (req, res, next) => {
       return res.status(500).json({ error: 'Audio generation failed' });
     }
 
-    res.set('Content-Type', 'audio/mpeg');
-    res.set('Content-Length', audioBuffer.length);
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': audioBuffer.length
+    });
     res.send(audioBuffer);
   } catch (err) {
     if (err.message.includes('API Key is invalid')) {

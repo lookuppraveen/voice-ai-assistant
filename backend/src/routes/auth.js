@@ -1,6 +1,6 @@
 const router = require('express').Router();
 const { body } = require('express-validator');
-const { register, login, getMe, updateProfile } = require('../controllers/authController');
+const { register, login, getMe, updateProfile, changePassword } = require('../controllers/authController');
 const { registerCompany } = require('../controllers/companyController');
 const { authenticate } = require('../middleware/auth');
 
@@ -34,5 +34,6 @@ router.post('/register-company', registerCompanyValidation, registerCompany);
 router.post('/login', loginValidation, login);
 router.get('/me', authenticate, getMe);
 router.put('/profile', authenticate, updateProfile);
+router.put('/change-password', authenticate, changePassword);
 
 module.exports = router;

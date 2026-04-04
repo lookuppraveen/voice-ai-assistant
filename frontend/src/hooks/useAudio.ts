@@ -185,30 +185,42 @@ export const useAudio = () => {
       setError(null);
 
       const res = await sessionsApi.getTTSAudio(text);
+      if (!(res.data instanceof Blob)) {
+        throw new Error('Invalid audio data received');
+      }
+
       const url = URL.createObjectURL(res.data);
       const audio = new Audio(url);
+      
+      // Ensure the browser 'unmutes' the audio correctly
+      audio.autoplay = false;
+      audio.preload = 'auto';
+
       currentAudioRef.current = audio;
 
       return new Promise((resolve) => {
+        audio.oncanplaythrough = () => {
+          audio.play().catch((err) => {
+            console.error('Audio Play Error:', err);
+            setError(`Playback failed: ${err.message}`);
+            resolve();
+          });
+        };
+
         audio.onended = () => {
           setIsSpeaking(false);
           URL.revokeObjectURL(url);
           currentAudioRef.current = null;
           resolve();
         };
-        audio.onerror = () => {
+
+        audio.onerror = (e) => {
+          console.error('Audio Element Error:', e);
           setIsSpeaking(false);
           URL.revokeObjectURL(url);
           currentAudioRef.current = null;
           resolve();
         };
-        audio.play().catch((err) => {
-          setError(`Audio play failed: ${err.message}`);
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          currentAudioRef.current = null;
-          resolve();
-        });
       });
     } catch (err: any) {
       let errorMessage = 'Failed to load HQ audio response.';

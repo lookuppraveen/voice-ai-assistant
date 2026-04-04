@@ -57,6 +57,9 @@ export default function ProfilePage() {
     reader.readAsDataURL(file);
   };
 
+  const [passwords, setPasswords] = useState({ current: '', new: '' });
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.full_name.trim()) { showToast('error', 'Full name is required'); return; }
@@ -69,6 +72,30 @@ export default function ProfilePage() {
       showToast('error', 'Failed to save. Please try again.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleChangePassword = async () => {
+    if (!passwords.current || !passwords.new) {
+      showToast('error', 'Both current and new passwords are required');
+      return;
+    }
+    if (passwords.new.length < 8) {
+      showToast('error', 'New password must be at least 8 characters');
+      return;
+    }
+    setPasswordLoading(true);
+    try {
+      await authApi.changePassword({
+        currentPassword: passwords.current,
+        newPassword: passwords.new
+      });
+      showToast('success', 'Password updated successfully');
+      setPasswords({ current: '', new: '' });
+    } catch (err: any) {
+      showToast('error', err.response?.data?.error || 'Failed to update password');
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -242,6 +269,48 @@ export default function ProfilePage() {
                 className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all resize-none"
               />
               <p className="text-xs text-gray-400 dark:text-slate-500 mt-1.5 text-right">{form.bio.length} / 500</p>
+            </div>
+          </div>
+
+          {/* ── Security / Password ── */}
+          <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-800 rounded-2xl p-6 shadow-sm space-y-5">
+            <h2 className="text-gray-900 dark:text-white font-semibold flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" /> Security
+            </h2>
+            
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Current Password</label>
+                  <input
+                    type="password"
+                    value={passwords.current}
+                    onChange={e => setPasswords(p => ({ ...p, current: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">New Password</label>
+                  <input
+                    type="password"
+                    value={passwords.new}
+                    onChange={e => setPasswords(p => ({ ...p, new: e.target.value }))}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500/50"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end">
+                <button
+                  type="button"
+                  onClick={handleChangePassword}
+                  disabled={passwordLoading}
+                  className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-bold rounded-lg transition-colors flex items-center gap-2 disabled:opacity-50"
+                >
+                  {passwordLoading ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
+                  Update Password
+                </button>
+              </div>
             </div>
           </div>
 
