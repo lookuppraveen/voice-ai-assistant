@@ -42,6 +42,8 @@ function SessionContent() {
 
   // ── Countdown display ────────────────────────────────────────────────────────
   const [countdown, setCountdown] = useState(0);
+  const turnInProgressRef = useRef(false);
+  const [isTurnActive, setIsTurnActive] = useState(false); // Used for UI only
 
   const runCountdown = async (seconds: number) => {
     for (let i = seconds; i > 0; i--) {
@@ -51,31 +53,30 @@ function SessionContent() {
     setCountdown(0);
   };
 
-  const [isTurnActive, setIsTurnActive] = useState(false);
-
   // ── Core turn handler ────────────────────────────────────────────────────────
   const doTurn = useCallback(async () => {
-    if (stopLoopRef.current || isTurnActive) return;
+    if (stopLoopRef.current || turnInProgressRef.current) return;
     
+    turnInProgressRef.current = true;
     setIsTurnActive(true);
     console.log('Turn: Starting turn...');
     try {
       const audioBlob = await audio.startListening(autoListenRef.current);
-      if (!audioBlob) {
-        console.log('Turn: No audio captured, ending turn.');
-        setIsTurnActive(false);
+      if (!audioBlob || stopLoopRef.current) {
+        console.log('Turn: No audio captured or turn stopped.');
         return;
       }
 
       console.log('Turn: Sending audio to AI...');
       const aiText = await session.sendAudioTurn(audioBlob);
-      if (!aiText) {
-        setIsTurnActive(false);
-        return;
+      if (!aiText || stopLoopRef.current) return;
+
+      // Apply response delay with countdown (respected after backend returns)
+      if (responseDelay > 0 && !stopLoopRef.current) {
+        await runCountdown(responseDelay);
       }
 
-      // Apply response delay with countdown
-      if (responseDelay > 0) await runCountdown(responseDelay);
+      if (stopLoopRef.current) return;
 
       console.log('Turn: AI speaking...');
       await audio.speakText(aiText);
@@ -84,9 +85,10 @@ function SessionContent() {
       console.error('Turn error:', e);
     } finally {
       setIsTurnActive(false);
+      turnInProgressRef.current = false;
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audio, session, responseDelay, isTurnActive]);
+  }, [audio, session, responseDelay]);
 
   // ── Auto-listen Loop (The "React Way") ──────────────────────────────────────
   const isBusy = audio.isProcessing || session.isLoading || audio.isSpeaking || isTurnActive;
@@ -95,10 +97,10 @@ function SessionContent() {
     // Only trigger if we are in auto-conversation mode and not currently busy
     if (autoListen && !isBusy && countdown === 0 && session.status === 'in_progress' && !audio.isListening) {
       const timer = setTimeout(() => {
-        if (autoListenRef.current && !stopLoopRef.current) {
+        if (autoListenRef.current && !stopLoopRef.current && !turnInProgressRef.current) {
           doTurn();
         }
-      }, 1000);
+      }, 500); // Super-fast (0.5s) hand-off
       return () => clearTimeout(timer);
     }
   }, [autoListen, isBusy, countdown, session.status, audio.isListening, doTurn]);
@@ -154,8 +156,6 @@ function SessionContent() {
       </div>
     );
   }
-
-
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">

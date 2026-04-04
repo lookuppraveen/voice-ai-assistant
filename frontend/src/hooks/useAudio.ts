@@ -125,7 +125,7 @@ export const useAudio = () => {
           }
 
           if (autoStopEnabled) {
-            const THRESHOLD = 35; // Back to 35, now that UI is optimized
+            const THRESHOLD = 25; // More sensitive to catch real speech
             if (speechVol > THRESHOLD) { 
               if (!hasSpoken) console.log('Audio: Speech detected at vol:', speechVol);
               hasSpoken = true;
@@ -135,12 +135,17 @@ export const useAudio = () => {
             const silenceDuration = Date.now() - silenceStart;
             const captureDuration = Date.now() - startTime;
 
-            // Stop if silence after speaking OR global timeout (30s)
-            if (hasSpoken && silenceDuration > 1500) {
-              console.log('Audio: Auto-stop (silence)');
+            // 1. Stop if silence after speaking
+            // 2. Stop if NO speech detected for 15s (User forgot to talk)
+            // 3. Stop if Turn exceeds 30s regardless (Global safety timeout)
+            if (captureDuration > 30000) {
+              console.log('Audio: Auto-stop (hard 30s limit)');
+              mediaRecorder.stop();
+            } else if (hasSpoken && silenceDuration > 800) { // Reduced to 800ms for faster response
+              console.log('Audio: Auto-stop (silence after speech)');
               mediaRecorder.stop();
             } else if (!hasSpoken && captureDuration > 15000) { 
-              console.log('Audio: Auto-stop (timeout)');
+              console.log('Audio: Auto-stop (initial timeout)');
               mediaRecorder.stop();
             } else {
               tickId = requestAnimationFrame(tick);
