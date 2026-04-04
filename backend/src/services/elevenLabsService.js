@@ -11,7 +11,7 @@ const generateAudio = async (text, overrides = {}) => {
       `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
       {
         text,
-        model_id: 'eleven_turbo_v2_5', // Fast, low latency conversational model
+        model_id: 'eleven_multilingual_v2', // More widely supported high-quality model
         voice_settings: {
           stability: 0.5,
           similarity_boost: 0.75,
@@ -30,6 +30,7 @@ const generateAudio = async (text, overrides = {}) => {
 
     return Buffer.from(response.data);
   } catch (error) {
+    console.error('ElevenLabs TTS Error:', error.response?.data?.error || error.message);
     if (error.response?.status === 401) {
       throw new Error('ElevenLabs API Key is invalid or expired.');
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useRef, useState, Suspense } from 'react';
+import { useCallback, useRef, useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from '@/hooks/useSession';
 import { useAudio } from '@/hooks/useAudio';
@@ -28,10 +28,10 @@ function SessionContent() {
 
   // ── Settings (chosen before start) ──────────────────────────────────────────
   const [responseDelay, setResponseDelay] = useState(0);
-  const [autoListen,    setAutoListen]    = useState(false);
+  const [autoListen,    setAutoListen]    = useState(true);
 
   // Use a ref so the async loop always reads the latest value, not a stale closure
-  const autoListenRef = useRef(false);
+  const autoListenRef = useRef(true);
   const stopLoopRef   = useRef(false);          // set to true to break the auto loop
 
   const syncAutoListen = (val: boolean) => {
@@ -51,45 +51,57 @@ function SessionContent() {
     setCountdown(0);
   };
 
+  const [isTurnActive, setIsTurnActive] = useState(false);
+
   // ── Core turn handler ────────────────────────────────────────────────────────
   const doTurn = useCallback(async () => {
+    if (stopLoopRef.current || isTurnActive) return;
+    
+    setIsTurnActive(true);
+    console.log('Turn: Starting turn...');
     try {
       const audioBlob = await audio.startListening(autoListenRef.current);
       if (!audioBlob) {
-        // If the mic stopped because of no-speech timeout but Auto-listen is still ON,
-        // we restart the listener. We must wait at least 1500ms, otherwise Chrome thinks we are
-        // abusing the microphone API and will completely lock it silently.
-        if (autoListenRef.current && !stopLoopRef.current) {
-          setTimeout(doTurn, 1500);
-        }
+        console.log('Turn: No audio captured, ending turn.');
+        setIsTurnActive(false);
         return;
       }
 
+      console.log('Turn: Sending audio to AI...');
       const aiText = await session.sendAudioTurn(audioBlob);
       if (!aiText) {
-        if (autoListenRef.current && !stopLoopRef.current) {
-          setTimeout(doTurn, 3000);
-        }
+        setIsTurnActive(false);
         return;
       }
 
       // Apply response delay with countdown
       if (responseDelay > 0) await runCountdown(responseDelay);
 
+      console.log('Turn: AI speaking...');
       await audio.speakText(aiText);
-
-      // Auto-listen loop: keep going until toggled off or session ends
-      if (autoListenRef.current && !stopLoopRef.current) {
-        doTurn();
-      }
+      console.log('Turn: AI finished speaking.');
     } catch (e) {
-      // If a mic error happens, try to gracefully recover so auto-listen doesn't die forever
-      if (autoListenRef.current && !stopLoopRef.current) {
-        setTimeout(doTurn, 1000);
-      }
+      console.error('Turn error:', e);
+    } finally {
+      setIsTurnActive(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audio, session, responseDelay]);
+  }, [audio, session, responseDelay, isTurnActive]);
+
+  // ── Auto-listen Loop (The "React Way") ──────────────────────────────────────
+  const isBusy = audio.isProcessing || session.isLoading || audio.isSpeaking || isTurnActive;
+
+  useEffect(() => {
+    // Only trigger if we are in auto-conversation mode and not currently busy
+    if (autoListen && !isBusy && countdown === 0 && session.status === 'in_progress' && !audio.isListening) {
+      const timer = setTimeout(() => {
+        if (autoListenRef.current && !stopLoopRef.current) {
+          doTurn();
+        }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoListen, isBusy, countdown, session.status, audio.isListening, doTurn]);
 
   // ── Start session ────────────────────────────────────────────────────────────
   const handleStart = useCallback(async () => {
@@ -98,8 +110,6 @@ function SessionContent() {
     if (openingText) {
       if (responseDelay > 0) await runCountdown(responseDelay);
       await audio.speakText(openingText);
-      // Kick off auto-listen right after opening if enabled
-      if (autoListenRef.current) doTurn();
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, audio, topicId, responseDelay]);
@@ -145,7 +155,7 @@ function SessionContent() {
     );
   }
 
-  const isBusy = audio.isProcessing || session.isLoading || audio.isSpeaking;
+
 
   return (
     <div className="min-h-screen bg-gray-900 flex flex-col">
@@ -167,31 +177,7 @@ function SessionContent() {
           <p className="text-gray-400 text-xs">{session.messages.length} turns</p>
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Auto-listen toggle (only visible during session) */}
-          {session.status === 'in_progress' && (
-            <button
-              onClick={() => syncAutoListen(!autoListen)}
-              title={autoListen ? 'Auto-listen ON — click to disable' : 'Auto-listen OFF — click to enable'}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${
-                autoListen
-                  ? 'bg-emerald-600 border-emerald-500 text-white'
-                  : 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
-              }`}
-            >
-              <Repeat className="h-3.5 w-3.5" />
-              <span className="hidden sm:inline">{autoListen ? 'Auto: ON' : 'Auto: OFF'}</span>
-            </button>
-          )}
-
-          {session.status === 'in_progress' ? (
-            <Button size="sm" variant="danger" onClick={handleEndSession} loading={session.isLoading && !isBusy}>
-              <StopCircle className="h-4 w-4 mr-1" /> End & Score
-            </Button>
-          ) : (
-            <div className="w-24" />
-          )}
-        </div>
+        <div className="w-24" />
       </div>
 
       {/* ── Main ─────────────────────────────────────────────────────────────── */}
@@ -314,14 +300,53 @@ function SessionContent() {
               )}
             </div>
 
-            {/* Recorder — hidden in auto-listen mode but still rendered */}
-            <div className={`flex justify-center transition-opacity ${autoListen ? 'opacity-40 pointer-events-none' : ''}`}>
-              <VoiceRecorder
-                listenState={audio.listenState}
-                onStart={handleManualListen}
-                onStop={audio.stopListening}
-                disabled={session.status !== 'in_progress' || isBusy || autoListen}
-              />
+            {/* Bottom Controls Area */}
+            <div className="flex flex-col items-center gap-6 mt-2">
+              {/* Recorder — hidden/dimmed in auto-listen mode */}
+              <div className={`transition-all duration-300 ${autoListen ? 'opacity-30 scale-95 pointer-events-none' : 'opacity-100'}`}>
+                <VoiceRecorder
+                  listenState={audio.listenState}
+                  volume={audio.volume}
+                  onStart={handleManualListen}
+                  onStop={audio.stopListening}
+                  disabled={session.status !== 'in_progress' || isBusy || autoListen}
+                />
+              </div>
+
+              {/* Action Buttons Toolbar */}
+              {session.status === 'in_progress' && (
+                <div className="flex items-center gap-4 bg-gray-800/50 p-2 rounded-2xl border border-gray-700/50 backdrop-blur-sm shadow-xl">
+                  {/* Auto-listen toggle */}
+                  <button
+                    onClick={() => syncAutoListen(!autoListen)}
+                    title={autoListen ? 'Auto-listen ON — click to disable' : 'Auto-listen OFF — click to enable'}
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold border transition-all duration-200 ${
+                      autoListen
+                        ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.2)]'
+                        : 'bg-gray-700/50 border-gray-600/50 text-gray-400 hover:bg-gray-700 hover:text-white'
+                    }`}
+                  >
+                    <Repeat className={`h-4 w-4 ${autoListen ? 'animate-spin-slow' : ''}`} />
+                    <span>{autoListen ? 'Auto: ON' : 'Auto: OFF'}</span>
+                  </button>
+
+                  <div className="w-px h-6 bg-gray-700/50" />
+
+                  {/* End Session Button */}
+                  <button
+                    onClick={handleEndSession}
+                    disabled={session.isLoading && !isBusy}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold bg-red-500/10 border border-red-500/30 text-red-500 hover:bg-red-500 hover:text-white transition-all duration-200"
+                  >
+                    {session.isLoading && !isBusy ? (
+                      <div className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    ) : (
+                      <StopCircle className="h-4 w-4" />
+                    )}
+                    <span>End & Score</span>
+                  </button>
+                </div>
+              )}
             </div>
 
             {autoListen && (

@@ -1,72 +1,106 @@
 'use client';
 
-import { clsx } from 'clsx';
+import React, { useState, useEffect } from 'react';
 import { Mic, Square, Loader2 } from 'lucide-react';
-import { ListenState } from '@/hooks/useAudio';
+import Button from '../ui/Button';
 
 interface VoiceRecorderProps {
-  listenState: ListenState;
+  listenState: 'idle' | 'listening' | 'processing';
+  volume: () => number;
   onStart: () => void;
   onStop: () => void;
   disabled?: boolean;
 }
 
-const WaveBar = ({ delay }: { delay: number }) => (
-  <span
-    className="inline-block w-1 bg-white rounded-full"
-    style={{
-      height: '20px',
-      animation: 'wave 0.8s ease-in-out infinite',
-      animationDelay: `${delay}s`,
-    }}
-  />
-);
+const WaveBar = ({ scale }: { scale: number }) => {
+  return (
+    <span
+      className="inline-block w-1.5 bg-blue-400 rounded-full transition-all duration-75"
+      style={{
+        height: `${Math.max(8, 48 * scale)}px`,
+        opacity: 0.3 + (0.7 * scale),
+        filter: `drop-shadow(0 0 8px rgba(96, 165, 250, ${0.4 * scale}))`,
+      }}
+    />
+  );
+};
 
-export const VoiceRecorder = ({ listenState, onStart, onStop, disabled }: VoiceRecorderProps) => {
+export const VoiceRecorder = ({ 
+  listenState, 
+  volume, 
+  onStart, 
+  onStop, 
+  disabled 
+}: VoiceRecorderProps) => {
   const isListening = listenState === 'listening';
   const isProcessing = listenState === 'processing';
+  const [localVol, setLocalVol] = useState(0);
+
+  // Poll volume only when listening to avoid high-frequency parent re-renders
+  useEffect(() => {
+    if (!isListening) {
+      setLocalVol(0);
+      return;
+    }
+
+    let frameId: number;
+    const poll = () => {
+      setLocalVol(volume());
+      frameId = requestAnimationFrame(poll);
+    };
+    frameId = requestAnimationFrame(poll);
+    return () => cancelAnimationFrame(frameId);
+  }, [isListening, volume]);
+
+  const bars = [0, 1, 2, 3, 4];
+  const getScale = (index: number) => {
+    const base = 0.2;
+    // localVol is 0-255. Normalize to 0-1 range for the visualizer.
+    const factor = (localVol / 255) * 1.5;
+    const stagger = [0.4, 0.7, 1, 0.7, 0.4][index];
+    return Math.max(base, factor * stagger);
+  };
 
   return (
-    <div className="flex flex-col items-center gap-4">
-      <button
-        onClick={isListening ? onStop : onStart}
-        disabled={disabled || isProcessing}
-        className={clsx(
-          'relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-4',
-          {
-            'bg-red-500 hover:bg-red-600 focus:ring-red-300 scale-110': isListening,
-            'bg-blue-600 hover:bg-blue-700 focus:ring-blue-300': !isListening && !isProcessing,
-            'bg-gray-500 cursor-not-allowed': disabled || isProcessing,
-          }
-        )}
-      >
-        {isListening && (
-          <span className="absolute inset-0 rounded-full bg-red-400 animate-ping opacity-40" />
-        )}
-        {isProcessing ? (
-          <Loader2 className="h-8 w-8 text-white animate-spin" />
-        ) : isListening ? (
-          <Square className="h-8 w-8 text-white" />
+    <div className="flex flex-col items-center gap-6">
+      {/* Wave Visualizer */}
+      <div className="h-16 flex items-center justify-center gap-1.5">
+        {isListening ? (
+          bars.map((i) => (
+            <WaveBar key={i} scale={getScale(i)} />
+          ))
         ) : (
-          <Mic className="h-8 w-8 text-white" />
+          <div className="text-gray-500 text-sm font-medium animate-pulse">
+            {isProcessing ? 'AI is processing...' : 'Say something naturally'}
+          </div>
         )}
-      </button>
+      </div>
 
-      {isListening && (
-        <div className="flex items-end gap-0.5 h-8">
-          {[0, 0.1, 0.2, 0.3, 0.4].map((d, i) => (
-            <WaveBar key={i} delay={d} />
-          ))}
-        </div>
-      )}
+      <div className="relative">
+        {/* Pulsing ring when listening */}
+        {isListening && (
+          <div className="absolute inset-0 rounded-full bg-blue-500/20 animate-ping" />
+        )}
 
-      <p className="text-sm font-medium text-gray-400">
-        {isProcessing
-          ? 'Processing your speech...'
-          : isListening
-          ? 'Listening — click to stop'
-          : 'Click mic to speak'}
-      </p>
+        <Button
+          size="lg"
+          onClick={isListening ? onStop : onStart}
+          disabled={disabled || isProcessing}
+          className={`h-16 w-16 rounded-full shadow-2xl transition-all duration-300 ${
+            isListening 
+              ? 'bg-red-500 hover:bg-red-600 ring-4 ring-red-500/20 scale-110' 
+              : 'bg-indigo-600 hover:bg-indigo-700'
+          }`}
+        >
+          {isProcessing ? (
+            <Loader2 className="h-8 w-8 animate-spin" />
+          ) : isListening ? (
+            <Square className="h-8 w-8 text-white fill-current" />
+          ) : (
+            <Mic className="h-8 w-8 text-white" />
+          )}
+        </Button>
+      </div>
     </div>
   );
 };

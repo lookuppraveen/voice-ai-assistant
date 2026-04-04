@@ -272,7 +272,9 @@ const listSessions = async (req, res, next) => {
               sb.confidence_score, sb.clarity_score, sb.objection_handling_score,
               sb.closing_technique_score, sb.product_knowledge_score, sb.rapport_score
        FROM sessions s
-       LEFT JOIN score_breakdowns sb ON sb.session_id = s.id
+       LEFT JOIN (
+         SELECT DISTINCT ON (session_id) * FROM score_breakdowns ORDER BY session_id, created_at DESC
+       ) sb ON sb.session_id = s.id
        WHERE s.user_id = $1
        ORDER BY s.created_at DESC
        LIMIT $2 OFFSET $3`,
