@@ -16,7 +16,7 @@ export const useAudio = () => {
 
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array | null>(null);
+  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
   const volRef = useRef(0);
 
   /**
@@ -32,7 +32,7 @@ export const useAudio = () => {
       
       audioContextRef.current = ctx;
       analyserRef.current = analyser;
-      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount);
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
     }
     
     return {
