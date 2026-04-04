@@ -125,7 +125,7 @@ export const useAudio = () => {
           }
 
           if (autoStopEnabled) {
-            const THRESHOLD = 25; // More sensitive to catch real speech
+            const THRESHOLD = 30; // Balanced for noise rejection + voice sensitivity
             if (speechVol > THRESHOLD) { 
               if (!hasSpoken) console.log('Audio: Speech detected at vol:', speechVol);
               hasSpoken = true;
@@ -141,7 +141,7 @@ export const useAudio = () => {
             if (captureDuration > 30000) {
               console.log('Audio: Auto-stop (hard 30s limit)');
               mediaRecorder.stop();
-            } else if (hasSpoken && silenceDuration > 800) { // Reduced to 800ms for faster response
+            } else if (hasSpoken && silenceDuration > 1200) { // Balanced (1.2s)
               console.log('Audio: Auto-stop (silence after speech)');
               mediaRecorder.stop();
             } else if (!hasSpoken && captureDuration > 15000) { 
