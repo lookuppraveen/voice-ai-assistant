@@ -7,7 +7,8 @@ import { superAdminApi, adminApi } from '@/lib/api';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Logo } from '@/components/ui/Logo';
-import { LogOut, Eye, X, Activity, Calendar, Clock } from 'lucide-react';
+import { LogOut, Eye, X, Activity, Calendar, Clock, BookOpen, Users, Plus, Sparkles } from 'lucide-react';
+import { topicsApi } from '@/lib/api';
 
 const SCENARIO_LABELS: Record<string, string> = {
   cold_call:            'Cold Call',
@@ -29,6 +30,8 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string; onClos
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // If we are auditing as super admin, we need to bypass the standard candidate-sessions-by-company check
+    // The backend adminController has been updated to allow system_admin role to see any candidate sessions.
     adminApi.candidateSessions(candidateId)
       .then(res => setData(res.data))
       .catch(() => setData(null))
@@ -128,6 +131,114 @@ function CandidateDrawer({ candidateId, onClose }: { candidateId: string; onClos
   );
 }
 
+function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onClose: () => void, onSave: () => void }) {
+  const [form, setForm] = useState({ name: '', description: '', system_prompt: '' });
+  const [saving, setSaving] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleGenerate = async () => {
+    if (!form.name) {
+      setError('Please enter a name first');
+      return;
+    }
+    setIsGenerating(true);
+    setError('');
+    try {
+      const res = await topicsApi.generatePrompt({ name: form.name, description: form.description });
+      setForm(prev => ({ ...prev, system_prompt: res.data.system_prompt }));
+    } catch {
+      setError('AI generation failed');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name || !form.system_prompt) {
+      setError('Topic name and AI system prompt are required');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      await superAdminApi.createCompanyTopic(companyId, form);
+      onSave();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to create topic');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 flex flex-col max-h-[90vh]">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Add Topic for Company</h3>
+        {error && <div className="p-2 mb-4 bg-red-50 text-red-600 text-xs rounded border border-red-100">{error}</div>}
+        
+        <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-1 tracking-wider">Topic Name</label>
+            <input 
+              type="text" 
+              value={form.name} 
+              onChange={e => setForm({...form, name: e.target.value})} 
+              className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-bold text-gray-400 uppercase mb-1 tracking-wider">Description</label>
+            <input 
+              type="text" 
+              value={form.description} 
+              onChange={e => setForm({...form, description: e.target.value})} 
+              className="w-full border border-gray-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none" 
+            />
+          </div>
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider">AI System Prompt</label>
+              <button 
+                onClick={handleGenerate} 
+                disabled={isGenerating || !form.name.trim()} 
+                className="text-[10px] font-bold text-indigo-600 flex items-center gap-1 hover:text-indigo-800 disabled:opacity-50"
+              >
+                 <Sparkles className={`h-2.5 w-2.5 ${isGenerating ? 'animate-pulse' : ''}`} /> 
+                 {isGenerating ? 'AI THINKING...' : 'GENERATE WITH AI'}
+              </button>
+            </div>
+            <textarea 
+              rows={8} 
+              value={form.system_prompt} 
+              onChange={e => setForm({...form, system_prompt: e.target.value})} 
+              className="w-full border border-gray-200 rounded-lg p-3 text-xs font-mono bg-gray-50 focus:bg-white transition-colors outline-none" 
+            />
+            <p className="text-[10px] text-gray-400 mt-1 italic">The prompt defines how the AI will act during the call.</p>
+          </div>
+        </div>
+
+        <div className="flex gap-3 mt-6 pt-4 border-t border-gray-100">
+          <button 
+            onClick={onClose} 
+            className="flex-1 px-4 py-2 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+          >
+            Cancel
+          </button>
+          <Button 
+            onClick={handleSubmit} 
+            loading={saving} 
+            className="flex-1"
+          >
+            Create Topic
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CompanyAuditPage() {
   const router = useRouter();
   const params = useParams();
@@ -137,6 +248,8 @@ export default function CompanyAuditPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'roster' | 'topics'>('roster');
+  const [isAddingTopic, setIsAddingTopic] = useState(false);
 
   useEffect(() => {
     if (companyId) {
@@ -201,17 +314,52 @@ export default function CompanyAuditPage() {
             </p>
           </div>
           <div className="text-right">
-             <div className="text-sm text-gray-500">Total Lifecycle Sessions</div>
-             <div className="text-2xl font-bold text-indigo-700">{data?.total_sessions || 0}</div>
+             <div className="text-sm text-gray-500">Lifecycle Progress</div>
+             <div className="flex items-center gap-4 mt-1">
+                <div className="text-center">
+                  <div className="text-xl font-bold text-indigo-700">{data?.total_sessions || 0}</div>
+                  <div className="text-[10px] uppercase font-bold text-gray-400">Sessions</div>
+                </div>
+                <div className="w-px h-8 bg-gray-200" />
+                <div className="text-center">
+                  <div className="text-xl font-bold text-purple-700">{data?.topics?.length || 0}</div>
+                  <div className="text-[10px] uppercase font-bold text-gray-400">Topics</div>
+                </div>
+             </div>
           </div>
         </div>
 
-        {/* Users Table */}
-        <Card className="overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white flex justify-between items-center">
-            <h3 className="text-lg leading-6 font-medium text-gray-900">Roster</h3>
-          </div>
-          <div className="overflow-x-auto">
+        {/* Tab Switcher */}
+        <div className="flex items-center gap-2 mb-6 bg-white p-1 rounded-xl shadow-sm border border-gray-100 max-w-fit">
+          <button
+            onClick={() => setActiveTab('roster')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'roster' 
+              ? 'bg-indigo-600 text-white shadow-md' 
+              : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <Users className="h-4 w-4" /> Roster
+          </button>
+          <button
+            onClick={() => setActiveTab('topics')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              activeTab === 'topics' 
+              ? 'bg-indigo-600 text-white shadow-md' 
+              : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            <BookOpen className="h-4 w-4" /> Company Topics
+          </button>
+        </div>
+
+        {activeTab === 'roster' ? (
+          /* Users Table */
+          <Card className="overflow-hidden">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Registered Users</h3>
+            </div>
+            <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
                 <tr>
@@ -278,12 +426,69 @@ export default function CompanyAuditPage() {
             </table>
           </div>
         </Card>
+        ) : (
+          /* Topics Table */
+          <Card className="overflow-hidden">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white flex justify-between items-center">
+              <h3 className="text-lg leading-6 font-medium text-gray-900">Company-Specific Topics</h3>
+              <Button size="sm" className="flex items-center gap-2" onClick={() => setIsAddingTopic(true)}>
+                <Plus className="h-4 w-4" /> Add Topic
+              </Button>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Topic Name</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
+                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {data?.topics?.map((topic: any) => (
+                    <tr key={topic.id} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{topic.name}</div>
+                        <div className="text-xs text-gray-400 font-mono mt-1">{topic.id}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                          {topic.category || 'General'}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-gray-500 line-clamp-1 max-w-xs">{topic.description || 'No description'}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        {new Date(topic.created_at).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                  {(data?.topics?.length === 0) && (
+                    <tr>
+                      <td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-500">No topics found for this company.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+        )}
       </main>
 
       {selectedCandidate && (
         <CandidateDrawer 
           candidateId={selectedCandidate} 
           onClose={() => setSelectedCandidate(null)} 
+        />
+      )}
+
+      {isAddingTopic && (
+        <AddTopicModal 
+          companyId={companyId} 
+          onClose={() => setIsAddingTopic(false)} 
+          onSave={() => { setIsAddingTopic(false); fetchCompanyData(); }} 
         />
       )}
     </div>

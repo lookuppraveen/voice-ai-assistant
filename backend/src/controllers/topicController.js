@@ -1,5 +1,6 @@
 const { query } = require('../config/database');
 const { validationResult } = require('express-validator');
+const { generateTopicPrompt } = require('../services/claudeService');
 
 // GET /api/topics - List all topics for the company
 const listTopics = async (req, res, next) => {
@@ -121,10 +122,24 @@ const deleteTopic = async (req, res, next) => {
   }
 };
 
+// POST /api/topics/generate-prompt - AI assistance
+const generateAiPrompt = async (req, res, next) => {
+  try {
+    const { name, description } = req.body;
+    if (!name) return res.status(400).json({ error: 'Topic name is required to generate a prompt' });
+    
+    const prompt = await generateTopicPrompt(name, description);
+    res.json({ system_prompt: prompt });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   listTopics,
   getTopic,
   createTopic,
   updateTopic,
   deleteTopic,
+  generateAiPrompt
 };

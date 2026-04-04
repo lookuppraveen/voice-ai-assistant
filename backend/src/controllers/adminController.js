@@ -105,11 +105,21 @@ const getCandidateSessions = async (req, res, next) => {
   try {
     const { id: candidateId } = req.params;
 
+    const isAdmin = req.user.role === 'system_admin';
     const companyId = req.user.company_id;
-    const candidateResult = await query(
-      `SELECT id, email, full_name, department FROM users WHERE id = $1 AND role = 'candidate' AND company_id = $2`,
-      [candidateId, companyId]
-    );
+    
+    let candidateResult;
+    if (isAdmin) {
+      candidateResult = await query(
+        `SELECT id, email, full_name, department, company_id FROM users WHERE id = $1 AND role = 'candidate'`,
+        [candidateId]
+      );
+    } else {
+      candidateResult = await query(
+        `SELECT id, email, full_name, department, company_id FROM users WHERE id = $1 AND role = 'candidate' AND company_id = $2`,
+        [candidateId, companyId]
+      );
+    }
 
     if (candidateResult.rows.length === 0) {
       return res.status(404).json({ error: 'Candidate not found' });

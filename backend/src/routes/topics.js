@@ -7,6 +7,8 @@ const router = express.Router();
 
 router.use(authenticate);
 
+router.post('/generate-prompt', topicController.generateAiPrompt);
+
 // All authenticated users in a company can list scenarios/topics
 router.get('/', topicController.listTopics);
 

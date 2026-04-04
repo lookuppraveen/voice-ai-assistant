@@ -71,4 +71,30 @@ Be specific, honest, and constructive. Base scores strictly on the actual conver
   return JSON.parse(jsonMatch[0]);
 };
 
-module.exports = { getAIResponse, evaluateSession };
+const generateTopicPrompt = async (name, description) => {
+  const prompt = `You are an AI Sales Training Architect. 
+  Create a highly detailed "System Prompt" for a Voice AI that will act as a prospect in a sales training session.
+  
+  TOPIC NAME: ${name}
+  TOPIC DESCRIPTION: ${description || 'A professional sales interaction.'}
+  
+  The generated prompt must be written in the FIRST PERSON (e.g., "You are..."). 
+  It should include:
+  1. A specific persona (name, job title, personality traits).
+  2. A clear goal for the interaction.
+  3. Specific objections or challenges the prospect should raise.
+  4. Rules for the AI's behavior (be realistic, don't be too easy, keep responses concise for voice).
+  5. Success criteria for the salesperson.
+
+  Output ONLY the system prompt text. No introductory remarks.`;
+
+  const response = await client.messages.create({
+    model: 'claude-3-5-sonnet-20240620', // Use the latest stable sonnet
+    max_tokens: 1000,
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return response.content[0].text;
+};
+
+module.exports = { getAIResponse, evaluateSession, generateTopicPrompt };

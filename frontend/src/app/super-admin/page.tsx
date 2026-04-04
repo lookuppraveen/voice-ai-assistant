@@ -14,6 +14,43 @@ interface Company {
   created_at: string;
   candidate_count: string;
   session_count: string;
+  is_active: boolean;
+}
+
+function EditCompanyModal({ company, onClose, onSave }: { company: Company, onClose: () => void, onSave: (name: string) => Promise<void> }) {
+  const [name, setName] = useState(company.name);
+  const [saving, setSaving] = useState(false);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Edit Company</h3>
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Company Name</label>
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-white border border-gray-300 rounded-lg px-4 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Enter company name"
+            />
+          </div>
+          <div className="flex gap-3 mt-6">
+            <Button variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+            <Button 
+              onClick={() => { setSaving(true); onSave(name).finally(() => setSaving(false)); }} 
+              disabled={saving || !name.trim()} 
+              className="flex-1"
+            >
+              {saving ? 'Saving...' : 'Save Changes'}
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function SuperAdminDashboard() {
@@ -29,6 +66,7 @@ export default function SuperAdminDashboard() {
   const [savingConfig, setSavingConfig] = useState(false);
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [editingCompany, setEditingCompany] = useState<Company | null>(null);
 
   useEffect(() => {
     fetchDashboard();
@@ -63,6 +101,36 @@ export default function SuperAdminDashboard() {
       setError(err.response?.data?.error || 'Failed to update system settings');
     } finally {
       setSavingConfig(false);
+    }
+  };
+
+  const handleToggleStatus = async (companyId: string) => {
+    setError('');
+    try {
+      const res = await superAdminApi.toggleCompanyStatus(companyId);
+      setData(prev => prev ? {
+        ...prev,
+        companies: prev.companies.map(c => c.id === companyId ? { ...c, is_active: res.data.company.is_active } : c)
+      } : null);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to toggle company status');
+    }
+  };
+
+  const handleUpdateCompany = async (name: string) => {
+    if (!editingCompany) return;
+    setError('');
+    try {
+      const res = await superAdminApi.updateCompany(editingCompany.id, name);
+      setData(prev => prev ? {
+        ...prev,
+        companies: prev.companies.map(c => c.id === editingCompany.id ? { ...c, name: res.data.company.name } : c)
+      } : null);
+      setEditingCompany(null);
+      setSuccessMsg('Company renamed successfully');
+      setTimeout(() => setSuccessMsg(''), 4000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update company name');
     }
   };
 
@@ -173,6 +241,9 @@ export default function SuperAdminDashboard() {
                     Total Sessions
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Portal Access
+                  </th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Joined
                   </th>
                   <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -197,10 +268,31 @@ export default function SuperAdminDashboard() {
                         {company.session_count || '0'} sessions
                       </span>
                     </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                       <button
+                         onClick={() => handleToggleStatus(company.id)}
+                         className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold transition-all ${
+                           company.is_active 
+                            ? 'bg-emerald-100 text-emerald-700 hover:bg-red-100 hover:text-red-700' 
+                            : 'bg-red-100 text-red-700 hover:bg-emerald-100 hover:text-emerald-700'
+                         }`}
+                         title={company.is_active ? 'Click to disable' : 'Click to enable'}
+                       >
+                         {company.is_active ? 'ENABLED' : 'DISABLED'}
+                       </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(company.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        className="text-indigo-600 hover:bg-indigo-50"
+                        onClick={() => setEditingCompany(company)}
+                      >
+                        Edit
+                      </Button>
                       <Button 
                         variant="secondary" 
                         size="sm"
@@ -223,6 +315,14 @@ export default function SuperAdminDashboard() {
           </div>
         </Card>
       </main>
+
+      {editingCompany && (
+        <EditCompanyModal 
+          company={editingCompany}
+          onClose={() => setEditingCompany(null)}
+          onSave={handleUpdateCompany}
+        />
+      )}
     </div>
   );
 }

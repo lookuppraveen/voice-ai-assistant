@@ -68,10 +68,10 @@ export const sessionsApi = {
 // Topics
 export const topicsApi = {
   list: () => api.get('/api/topics'),
-  create: (data: { name: string; description: string; system_prompt: string }) =>
-    api.post('/api/topics', data),
-  update: (id: string, data: { name?: string; description?: string; system_prompt?: string }) =>
-    api.put(`/api/topics/${id}`, data),
+  get: (id: string) => api.get(`/api/topics/${id}`),
+  create: (data: any) => api.post('/api/topics', data),
+  generatePrompt: (data: { name: string, description?: string }) => api.post('/api/topics/generate-prompt', data),
+  update: (id: string, data: any) => api.put(`/api/topics/${id}`, data),
   delete: (id: string) => api.delete(`/api/topics/${id}`),
 };
 
@@ -106,7 +106,10 @@ export const companyApi = {
 // Super Admin
 export const superAdminApi = {
   getGlobalDashboard: () => api.get('/api/super-admin/companies'),
+  updateCompany: (id: string, name: string) => api.patch(`/api/super-admin/companies/${id}`, { name }),
+  toggleCompanyStatus: (id: string) => api.patch(`/api/super-admin/companies/${id}/status`),
   getCompanyAudits: (id: string) => api.get(`/api/super-admin/companies/${id}/users`),
+  createCompanyTopic: (id: string, data: any) => api.post(`/api/super-admin/companies/${id}/topics`, data),
   getSettings: () => api.get('/api/super-admin/settings'),
   updateSetting: (key: string, value: string) => api.patch('/api/super-admin/settings', { key, value })
 };

@@ -6,6 +6,7 @@ import { topicsApi } from '@/lib/api';
 import { getToken, getStoredUser } from '@/lib/auth';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { Sparkles } from 'lucide-react';
 
 interface Topic {
   id: string;
@@ -22,6 +23,7 @@ export default function AdminTopicsPage() {
   const [error, setError] = useState('');
   const [isCreating, setIsCreating] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const [form, setForm] = useState({
     name: '',
@@ -63,6 +65,23 @@ export default function AdminTopicsPage() {
       setError(err.response?.data?.error || 'Failed to create topic');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGeneratePrompt = async () => {
+    if (!form.name.trim()) {
+      setError('Please enter a scenario name first.');
+      return;
+    }
+    setIsGenerating(true);
+    setError('');
+    try {
+      const res = await topicsApi.generatePrompt({ name: form.name, description: form.description });
+      setForm(prev => ({ ...prev, system_prompt: res.data.system_prompt }));
+    } catch (err: any) {
+      setError('Failed to generate prompt with AI. Please try writing it manually.');
+    } finally {
+      setIsGenerating(false);
     }
   };
 
@@ -122,7 +141,18 @@ export default function AdminTopicsPage() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium dark:text-gray-300 mb-1">AI System Prompt</label>
+              <div className="flex justify-between items-center mb-1">
+                <label className="block text-sm font-medium dark:text-gray-300">AI System Prompt</label>
+                <button
+                  type="button"
+                  onClick={handleGeneratePrompt}
+                  disabled={isGenerating || !form.name.trim()}
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-600 hover:text-white transition-all disabled:opacity-50 disabled:grayscale"
+                >
+                  <Sparkles className={`h-3 w-3 ${isGenerating ? 'animate-pulse' : ''}`} />
+                  {isGenerating ? 'AI Thinking...' : 'Generate with AI'}
+                </button>
+              </div>
               <textarea
                 required
                 rows={6}

@@ -2,9 +2,12 @@ const { query } = require('../config/database');
 
 const getGlobalDashboard = async (req, res, next) => {
   try {
+    // Auto-migrate: Add is_active if it doesn't exist
+    await query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`);
+
     const companiesRes = await query(`
       SELECT 
-        c.id, c.name, c.created_at,
+        c.id, c.name, c.created_at, c.is_active,
         (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'candidate') as candidate_count,
         (SELECT COUNT(*) FROM sessions s JOIN users u ON u.id = s.user_id WHERE u.company_id = c.id) as session_count
       FROM companies c
@@ -35,6 +38,9 @@ const getCompanyAudits = async (req, res, next) => {
   try {
     const { id } = req.params;
     
+    // Ensure column exists
+    await query(`ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true`);
+
     const companyRes = await query('SELECT name, created_at FROM companies WHERE id = $1', [id]);
     if (companyRes.rows.length === 0) {
       return res.status(404).json({ error: 'Company not found' });
@@ -54,9 +60,17 @@ const getCompanyAudits = async (req, res, next) => {
       WHERE u.company_id = $1
     `, [id]);
 
+    const topicsRes = await query(`
+      SELECT id, name, description, category, created_at
+      FROM topics
+      WHERE company_id = $1
+      ORDER BY created_at DESC
+    `, [id]);
+
     res.json({
       company: companyRes.rows[0],
       users: usersRes.rows,
+      topics: topicsRes.rows,
       total_sessions: parseInt(sessionsRes.rows[0].session_count)
     });
   } catch (err) {
@@ -102,9 +116,67 @@ const updateSetting = async (req, res, next) => {
   }
 };
 
+const updateCompany = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: 'Company name is required' });
+
+    const result = await query(
+      'UPDATE companies SET name = $1, updated_at = NOW() WHERE id = $2 RETURNING *',
+      [name, id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+    res.json({ company: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const toggleCompanyStatus = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const result = await query(
+      'UPDATE companies SET is_active = NOT is_active, updated_at = NOW() WHERE id = $1 RETURNING *',
+      [id]
+    );
+
+    if (result.rows.length === 0) return res.status(404).json({ error: 'Company not found' });
+    res.json({ company: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+};
+
+const createCompanyTopic = async (req, res, next) => {
+  try {
+    const { id: companyId } = req.params;
+    const { name, description, category = 'General', system_prompt } = req.body;
+    
+    if (!name || !system_prompt) {
+      return res.status(400).json({ error: 'Topic name and AI system prompt are required' });
+    }
+
+    const result = await query(
+      `INSERT INTO topics (company_id, name, description, category, system_prompt)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, description, category, created_at`,
+      [companyId, name, description || null, category, system_prompt]
+    );
+
+    res.status(201).json({ topic: result.rows[0] });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getGlobalDashboard,
   getCompanyAudits,
   getSettings,
-  updateSetting
+  updateSetting,
+  updateCompany,
+  toggleCompanyStatus,
+  createCompanyTopic
 };
