@@ -62,15 +62,19 @@ export const useSession = () => {
     }
   }, []);
 
-  /** Send a pre-transcribed text turn (browser STT fallback). Returns AI response text. */
-  const sendTurn = useCallback(async (transcribedText: string): Promise<string | null> => {
+  /** Send a pre-transcribed text turn (browser STT fast path). Returns AI response + embedded audio. */
+  const sendTurn = useCallback(async (transcribedText: string): Promise<{
+    text: string;
+    audioBase64: string | null;
+    audioMime: string;
+  } | null> => {
     const id = sessionIdRef.current;
     if (!id) return null;
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
     try {
       const res = await sessionsApi.sendTextTurn(id, transcribedText);
-      const { user_message, ai_response, turn } = res.data;
+      const { user_message, ai_response, turn, audio_base64, audio_mime } = res.data;
 
       const userMsg: Message = {
         id: `user-${turn}`,
@@ -96,7 +100,11 @@ export const useSession = () => {
         isLoading: false,
       }));
 
-      return ai_response.text;
+      return {
+        text: ai_response.text,
+        audioBase64: audio_base64 || null,
+        audioMime: audio_mime || 'audio/mpeg',
+      };
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to process turn');
       return null;

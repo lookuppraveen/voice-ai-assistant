@@ -65,40 +65,55 @@ function SessionContent() {
     console.log('[Turn] Starting…');
 
     try {
-      // --- 1. Record audio ---
-      const audioBlob = await audio.startListening(autoListenRef.current);
+      let result: { text: string; audioBase64: string | null; audioMime: string } | null = null;
 
-      if (!audioBlob) {
-        console.log('[Turn] No audio blob returned (mic error or empty).');
-        return;
+      // ⚡ Fast path: Browser Speech Recognition API (~100-200ms, no upload)
+      // Works in Chrome & Edge. Returns null if unavailable → falls back to Whisper.
+      if (autoListenRef.current && audio.isBrowserSTTSupported()) {
+        console.log('[Turn] Using browser STT (fast path)...');
+        const transcript = await audio.startBrowserSTT();
+        audio.setIdle();
+
+        if (stopLoopRef.current) return;
+
+        if (transcript) {
+          // Browser got a transcript — send text directly to backend (no audio upload)
+          console.log('[Turn] Browser STT got:', transcript);
+          result = await session.sendTurn(transcript);
+        } else {
+          // No speech detected (silence / timeout) — skip this turn quietly
+          console.log('[Turn] No speech detected by browser STT, skipping turn.');
+          return;
+        }
+
+      } else {
+        // 🔄 Fallback path: MediaRecorder + Whisper (manual mode or unsupported browser)
+        console.log('[Turn] Using Whisper STT (fallback path)...');
+        const audioBlob = await audio.startListening(autoListenRef.current);
+
+        if (!audioBlob) {
+          console.log('[Turn] No audio blob (mic error or empty).');
+          return;
+        }
+        if (stopLoopRef.current) return;
+
+        result = await session.sendAudioTurn(audioBlob);
+        audio.setIdle();
       }
-      if (stopLoopRef.current) {
-        console.log('[Turn] Stop requested after recording.');
-        return;
-      }
-
-      // listenState is now 'processing' — audio is sending to Whisper
-      console.log('[Turn] Sending audio to backend…');
-      const result = await session.sendAudioTurn(audioBlob);
-
-      // Transition audio hook back to idle now that Whisper processing is done
-      audio.setIdle();
 
       if (!result || stopLoopRef.current) return;
 
-      // Apply optional response delay
+      // Optional delay countdown
       if (responseDelay > 0 && !stopLoopRef.current) {
         await runCountdown(responseDelay);
       }
       if (stopLoopRef.current) return;
 
+      // Play AI response — use embedded audio for instant playback
       console.log('[Turn] Playing AI response...');
       if (result.audioBase64) {
-        // ⚡ Fast path: audio was embedded in the turn response — play immediately,
-        // no extra /tts HTTP round trip needed.
         await audio.playBase64Audio(result.audioBase64, result.audioMime);
       } else {
-        // Fallback: fetch TTS separately (e.g. if inline TTS generation failed)
         await audio.speakText(result.text);
       }
       console.log('[Turn] AI finished speaking.');

@@ -4,15 +4,22 @@ const superAdminController = require('../controllers/superAdminController');
 
 const router = express.Router();
 
-router.use(authenticate);
-router.use(authorize('system_admin')); // Strictly limit to system_admin
+// ── Public route — no auth needed (this IS the login for super admins) ──────
+router.post('/login', superAdminController.superAdminLogin);
 
+// ── All other routes require a valid system_admin JWT ────────────────────────
+router.use(authenticate);
+router.use(authorize('system_admin'));
+
+// Companies
 router.get('/companies', superAdminController.getGlobalDashboard);
+router.post('/companies', superAdminController.createCompany);           // NEW: Create company
 router.patch('/companies/:id', superAdminController.updateCompany);
 router.patch('/companies/:id/status', superAdminController.toggleCompanyStatus);
 router.get('/companies/:id/users', superAdminController.getCompanyAudits);
 router.post('/companies/:id/topics', superAdminController.createCompanyTopic);
 
+// System settings
 router.get('/settings', superAdminController.getSettings);
 router.patch('/settings', superAdminController.updateSetting);
 

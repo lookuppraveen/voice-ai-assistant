@@ -107,13 +107,17 @@ export const companyApi = {
 
 // Super Admin
 export const superAdminApi = {
+  login: (data: { email: string; password: string }) =>
+    api.post('/api/super-admin/login', data),
   getGlobalDashboard: () => api.get('/api/super-admin/companies'),
+  createCompany: (data: { company_name: string; admin_email: string; admin_password: string; admin_name: string }) =>
+    api.post('/api/super-admin/companies', data),
   updateCompany: (id: string, name: string) => api.patch(`/api/super-admin/companies/${id}`, { name }),
   toggleCompanyStatus: (id: string) => api.patch(`/api/super-admin/companies/${id}/status`),
   getCompanyAudits: (id: string) => api.get(`/api/super-admin/companies/${id}/users`),
   createCompanyTopic: (id: string, data: any) => api.post(`/api/super-admin/companies/${id}/topics`, data),
   getSettings: () => api.get('/api/super-admin/settings'),
-  updateSetting: (key: string, value: string) => api.patch('/api/super-admin/settings', { key, value })
+  updateSetting: (key: string, value: string) => api.patch('/api/super-admin/settings', { key, value }),
 };
 
 export default api;

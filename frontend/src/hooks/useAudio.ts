@@ -18,6 +18,8 @@ export const useAudio = () => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const dataArrayRef = useRef<Uint8Array<any> | null>(null);
   const volRef = useRef(0);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const speechRecognitionRef = useRef<any>(null);
 
   // Tracks whether a stop was explicitly requested (manual stop)
   const manualStopRef = useRef(false);
@@ -205,6 +207,11 @@ export const useAudio = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
+    // Also stop any active browser STT session
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef.current.stop();
+      speechRecognitionRef.current = null;
+    }
   }, []);
 
   /**
@@ -213,6 +220,85 @@ export const useAudio = () => {
    */
   const setIdle = useCallback(() => {
     setListenState('idle');
+  }, []);
+
+  /**
+   * Check whether the browser supports the Web Speech API.
+   */
+  const isBrowserSTTSupported = (): boolean => {
+    return typeof window !== 'undefined' &&
+      !!(window as any).SpeechRecognition || !!(window as any).webkitSpeechRecognition;
+  };
+
+  /**
+   * Use the browser's built-in SpeechRecognition API for near-instant transcription.
+   * ~100-200ms latency vs ~1500ms for Whisper cloud API.
+   * Returns the transcribed text, or null if unsupported / failed (caller falls back to Whisper).
+   */
+  const startBrowserSTT = useCallback((): Promise<string | null> => {
+    return new Promise((resolve) => {
+      const SpeechRec =
+        (window as any).SpeechRecognition ||
+        (window as any).webkitSpeechRecognition;
+
+      if (!SpeechRec) {
+        console.log('Browser STT: not supported, will use Whisper.');
+        resolve(null);
+        return;
+      }
+
+      setError(null);
+      setListenState('listening');
+      volRef.current = 0;
+
+      const recognition = new SpeechRec() as any;
+      recognition.lang = 'en-US';
+      recognition.continuous = false;      // Stop after first complete utterance
+      recognition.interimResults = false;  // Only final results (faster)
+      recognition.maxAlternatives = 1;
+
+      speechRecognitionRef.current = recognition;
+
+      let resolved = false;
+      const done = (text: string | null) => {
+        if (resolved) return;
+        resolved = true;
+        speechRecognitionRef.current = null;
+        setListenState(text ? 'processing' : 'idle');
+        resolve(text);
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results[0]?.[0]?.transcript?.trim();
+        const confidence = event.results[0]?.[0]?.confidence;
+        console.log(`Browser STT: "${transcript}" (confidence: ${confidence?.toFixed(2)})`);
+        done(transcript || null);
+      };
+
+      recognition.onnomatch = () => {
+        console.log('Browser STT: no match, falling back to Whisper.');
+        done(null);
+      };
+
+      recognition.onerror = (event: any) => {
+        if (event.error === 'aborted' || event.error === 'no-speech') {
+          // No speech / user cancelled — resolve null so turn skips cleanly
+          console.log('Browser STT: no speech detected.');
+          done(null);
+        } else {
+          console.warn('Browser STT error:', event.error, '— falling back to Whisper.');
+          done(null); // Null triggers Whisper fallback in doTurn
+        }
+      };
+
+      recognition.onend = () => {
+        // If onresult didn't fire, resolve as null
+        done(null);
+      };
+
+      recognition.start();
+      console.log('Browser STT: listening...');
+    });
   }, []);
 
   /**
@@ -380,6 +466,8 @@ export const useAudio = () => {
     startListening,
     stopListening,
     setIdle,
+    startBrowserSTT,
+    isBrowserSTTSupported,
     speakText,
     playBase64Audio,
     stopSpeaking,
