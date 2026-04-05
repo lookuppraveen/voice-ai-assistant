@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/Card';
 import { Logo } from '@/components/ui/Logo';
 import {
   LogOut, Settings, Save, Plus, X, Building2,
-  Users, Activity, Eye, EyeOff, CheckCircle,
+  Users, Activity, Eye, EyeOff, CheckCircle, Trash2,
 } from 'lucide-react';
 
 interface Company {
@@ -249,6 +249,8 @@ export default function SuperAdminDashboard() {
   const [successMsg, setSuccessMsg] = useState('');
   const [editingCompany, setEditingCompany] = useState<Company | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [deletingCompanyId, setDeletingCompanyId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchDashboard();
@@ -330,6 +332,30 @@ export default function SuperAdminDashboard() {
     );
     setSuccessMsg(`Company "${company.name}" created successfully!`);
     setTimeout(() => setSuccessMsg(''), 5000);
+  };
+
+  const handleDeleteCompany = async (companyId: string) => {
+    setDeletingCompanyId(companyId);
+    setError('');
+    try {
+      const res = await superAdminApi.deleteCompany(companyId);
+      setData((prev) =>
+        prev
+          ? {
+              ...prev,
+              total_companies: prev.total_companies - 1,
+              companies: prev.companies.filter((c) => c.id !== companyId),
+            }
+          : null
+      );
+      setSuccessMsg(res.data.message || 'Company deleted.');
+      setTimeout(() => setSuccessMsg(''), 5000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete company');
+    } finally {
+      setDeletingCompanyId(null);
+      setConfirmDeleteId(null);
+    }
   };
 
   const handleLogout = () => {
@@ -500,22 +526,50 @@ export default function SuperAdminDashboard() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(company.created_at).toLocaleDateString()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right space-x-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-indigo-600 hover:bg-indigo-50"
-                        onClick={() => setEditingCompany(company)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => router.push(`/super-admin/company/${company.id}`)}
-                      >
-                        Audit Profiles
-                      </Button>
+                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-indigo-600 hover:bg-indigo-50"
+                          onClick={() => setEditingCompany(company)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => router.push(`/super-admin/company/${company.id}`)}
+                        >
+                          Audit
+                        </Button>
+                        {confirmDeleteId === company.id ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs text-red-600 font-medium">Sure?</span>
+                            <button
+                              onClick={() => handleDeleteCompany(company.id)}
+                              disabled={deletingCompanyId === company.id}
+                              className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {deletingCompanyId === company.id ? '…' : 'Yes'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteId(null)}
+                              className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteId(company.id)}
+                            title="Delete company"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

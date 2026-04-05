@@ -16,9 +16,11 @@ router.get('/companies', superAdminController.getGlobalDashboard);
 router.post('/companies', superAdminController.createCompany);
 router.patch('/companies/:id', superAdminController.updateCompany);
 router.patch('/companies/:id/status', superAdminController.toggleCompanyStatus);
+router.delete('/companies/:id', superAdminController.deleteCompany);           // NEW
 router.get('/companies/:id/users', superAdminController.getCompanyAudits);
-router.post('/companies/:id/candidates', superAdminController.createCandidate); // NEW: add candidate
+router.post('/companies/:id/candidates', superAdminController.createCandidate);
 router.post('/companies/:id/topics', superAdminController.createCompanyTopic);
+router.delete('/companies/:id/topics/:topicId', superAdminController.deleteCompanyTopic); // NEW
 
 // System settings
 router.get('/settings', superAdminController.getSettings);

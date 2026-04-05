@@ -115,6 +115,9 @@ export const superAdminApi = {
   toggleCompanyStatus: (id: string) => api.patch(`/api/super-admin/companies/${id}/status`),
   getCompanyAudits: (id: string) => api.get(`/api/super-admin/companies/${id}/users`),
   createCompanyTopic: (id: string, data: any) => api.post(`/api/super-admin/companies/${id}/topics`, data),
+  deleteCompanyTopic: (companyId: string, topicId: string) =>
+    api.delete(`/api/super-admin/companies/${companyId}/topics/${topicId}`),
+  deleteCompany: (id: string) => api.delete(`/api/super-admin/companies/${id}`),
   createCandidate: (companyId: string, data: { full_name: string; email: string; password: string; department?: string }) =>
     api.post(`/api/super-admin/companies/${companyId}/candidates`, data),
   getSettings: () => api.get('/api/super-admin/settings'),

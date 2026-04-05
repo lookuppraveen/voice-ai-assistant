@@ -7,7 +7,7 @@ import { superAdminApi, adminApi } from '@/lib/api';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Logo } from '@/components/ui/Logo';
-import { LogOut, Eye, X, Activity, Calendar, Clock, BookOpen, Users, Plus, Sparkles, UserPlus, CheckCircle, EyeOff } from 'lucide-react';
+import { LogOut, Eye, X, Activity, Calendar, Clock, BookOpen, Users, Plus, Sparkles, UserPlus, CheckCircle, EyeOff, Trash2 } from 'lucide-react';
 import { topicsApi } from '@/lib/api';
 
 const SCENARIO_LABELS: Record<string, string> = {
@@ -379,6 +379,8 @@ export default function CompanyAuditPage() {
   const [isAddingTopic, setIsAddingTopic] = useState(false);
   const [isAddingCandidate, setIsAddingCandidate] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [confirmDeleteTopicId, setConfirmDeleteTopicId] = useState<string | null>(null);
+  const [deletingTopicId, setDeletingTopicId] = useState<string | null>(null);
 
   useEffect(() => {
     if (companyId) {
@@ -394,6 +396,25 @@ export default function CompanyAuditPage() {
       setError(err.response?.data?.error || 'Failed to load company audit data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDeleteTopic = async (topicId: string) => {
+    setDeletingTopicId(topicId);
+    setError('');
+    try {
+      await superAdminApi.deleteCompanyTopic(companyId, topicId);
+      setData((prev: any) => prev
+        ? { ...prev, topics: prev.topics.filter((t: any) => t.id !== topicId) }
+        : prev
+      );
+      setSuccessMsg('Topic deleted successfully.');
+      setTimeout(() => setSuccessMsg(''), 3000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to delete topic');
+    } finally {
+      setDeletingTopicId(null);
+      setConfirmDeleteTopicId(null);
     }
   };
 
@@ -579,7 +600,6 @@ export default function CompanyAuditPage() {
           </div>
         </Card>
         ) : (
-          /* Topics Table */
           <Card className="overflow-hidden">
             <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white flex justify-between items-center">
               <h3 className="text-lg leading-6 font-medium text-gray-900">Company-Specific Topics</h3>
@@ -595,6 +615,7 @@ export default function CompanyAuditPage() {
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Description</th>
                     <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Created</th>
+                    <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
@@ -602,7 +623,7 @@ export default function CompanyAuditPage() {
                     <tr key={topic.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">{topic.name}</div>
-                        <div className="text-xs text-gray-400 font-mono mt-1">{topic.id}</div>
+                        <div className="text-xs text-gray-400 font-mono mt-1">{topic.id.slice(0, 8)}…</div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -615,11 +636,39 @@ export default function CompanyAuditPage() {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         {new Date(topic.created_at).toLocaleDateString()}
                       </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-right">
+                        {confirmDeleteTopicId === topic.id ? (
+                          <div className="flex items-center justify-end gap-1">
+                            <span className="text-xs text-red-600 font-medium">Delete?</span>
+                            <button
+                              onClick={() => handleDeleteTopic(topic.id)}
+                              disabled={deletingTopicId === topic.id}
+                              className="text-xs px-2 py-1 rounded bg-red-600 text-white hover:bg-red-700 disabled:opacity-50"
+                            >
+                              {deletingTopicId === topic.id ? '…' : 'Yes'}
+                            </button>
+                            <button
+                              onClick={() => setConfirmDeleteTopicId(null)}
+                              className="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+                            >
+                              No
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            onClick={() => setConfirmDeleteTopicId(topic.id)}
+                            title="Delete topic"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </td>
                     </tr>
                   ))}
                   {(data?.topics?.length === 0) && (
                     <tr>
-                      <td colSpan={4} className="px-6 py-10 text-center text-sm text-gray-500">No topics found for this company.</td>
+                      <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">No topics found for this company.</td>
                     </tr>
                   )}
                 </tbody>

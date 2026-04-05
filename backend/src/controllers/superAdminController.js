@@ -316,6 +316,67 @@ const createCandidate = async (req, res, next) => {
   }
 };
 
+/**
+ * DELETE /api/super-admin/companies/:id
+ * Permanently removes a company and all its data (users, sessions, messages, topics).
+ */
+const deleteCompany = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+
+    const companyRes = await query('SELECT name FROM companies WHERE id = $1', [id]);
+    if (companyRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+    const companyName = companyRes.rows[0].name;
+
+    // Cascade delete: messages → sessions → users → topics → company
+    // (In order to respect FK constraints)
+    await query(`
+      DELETE FROM messages
+      WHERE session_id IN (
+        SELECT s.id FROM sessions s
+        JOIN users u ON u.id = s.user_id
+        WHERE u.company_id = $1
+      )`, [id]);
+
+    await query(`
+      DELETE FROM sessions
+      WHERE user_id IN (SELECT id FROM users WHERE company_id = $1)`, [id]);
+
+    await query('DELETE FROM users WHERE company_id = $1', [id]);
+    await query('DELETE FROM topics WHERE company_id = $1', [id]);
+    await query('DELETE FROM companies WHERE id = $1', [id]);
+
+    res.json({ success: true, message: `Company "${companyName}" and all its data have been deleted.` });
+  } catch (err) {
+    next(err);
+  }
+};
+
+/**
+ * DELETE /api/super-admin/companies/:companyId/topics/:topicId
+ * Delete a specific topic that belongs to a specific company.
+ */
+const deleteCompanyTopic = async (req, res, next) => {
+  try {
+    const { id: companyId, topicId } = req.params;
+
+    const result = await query(
+      'DELETE FROM topics WHERE id = $1 AND company_id = $2 RETURNING name',
+      [topicId, companyId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Topic not found for this company' });
+    }
+
+    res.json({ success: true, message: `Topic "${result.rows[0].name}" deleted.` });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getGlobalDashboard,
   getCompanyAudits,
@@ -326,5 +387,7 @@ module.exports = {
   createCompanyTopic,
   createCompany,
   createCandidate,
+  deleteCompany,
+  deleteCompanyTopic,
   superAdminLogin,
 };
