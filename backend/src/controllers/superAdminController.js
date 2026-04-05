@@ -271,6 +271,51 @@ const createCompany = async (req, res, next) => {
   }
 };
 
+/**
+ * POST /api/super-admin/companies/:id/candidates
+ * Create a candidate account under a specific company.
+ */
+const createCandidate = async (req, res, next) => {
+  try {
+    const { id: companyId } = req.params;
+    const { full_name, email, password, department } = req.body;
+
+    if (!full_name || !email || !password) {
+      return res.status(400).json({ error: 'full_name, email, and password are required' });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
+    // Verify company exists
+    const companyRes = await query('SELECT id, name FROM companies WHERE id = $1', [companyId]);
+    if (companyRes.rows.length === 0) {
+      return res.status(404).json({ error: 'Company not found' });
+    }
+
+    // Check for duplicate email
+    const existing = await query('SELECT id FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+    if (existing.rows.length > 0) {
+      return res.status(409).json({ error: 'An account with this email already exists' });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+    const userRes = await query(
+      `INSERT INTO users (company_id, email, password_hash, full_name, role, department)
+       VALUES ($1, $2, $3, $4, 'candidate', $5)
+       RETURNING id, email, full_name, role, department, is_active, created_at`,
+      [companyId, email.toLowerCase().trim(), passwordHash, full_name.trim(), department?.trim() || null]
+    );
+
+    res.status(201).json({
+      user: userRes.rows[0],
+      message: `Candidate "${full_name}" added to ${companyRes.rows[0].name}`,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 module.exports = {
   getGlobalDashboard,
   getCompanyAudits,
@@ -280,5 +325,6 @@ module.exports = {
   toggleCompanyStatus,
   createCompanyTopic,
   createCompany,
+  createCandidate,
   superAdminLogin,
 };

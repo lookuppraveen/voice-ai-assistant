@@ -7,7 +7,7 @@ import { superAdminApi, adminApi } from '@/lib/api';
 import Button from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Logo } from '@/components/ui/Logo';
-import { LogOut, Eye, X, Activity, Calendar, Clock, BookOpen, Users, Plus, Sparkles } from 'lucide-react';
+import { LogOut, Eye, X, Activity, Calendar, Clock, BookOpen, Users, Plus, Sparkles, UserPlus, CheckCircle, EyeOff } from 'lucide-react';
 import { topicsApi } from '@/lib/api';
 
 const SCENARIO_LABELS: Record<string, string> = {
@@ -243,6 +243,129 @@ function AddTopicModal({ companyId, onClose, onSave }: { companyId: string, onCl
   );
 }
 
+// ── Add Candidate Modal ──────────────────────────────────────────────────────
+function AddCandidateModal({ companyId, companyName, onClose, onCreated }: {
+  companyId: string;
+  companyName: string;
+  onClose: () => void;
+  onCreated: (user: any) => void;
+}) {
+  const [form, setForm] = useState({ full_name: '', email: '', department: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const set = (field: string) => (e: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((prev) => ({ ...prev, [field]: e.target.value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await superAdminApi.createCandidate(companyId, form);
+      setSuccess(res.data.message);
+      setTimeout(() => {
+        onCreated(res.data.user);
+        onClose();
+      }, 1200);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to add candidate');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inp = 'w-full bg-white border border-gray-300 rounded-lg px-4 py-2.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all';
+  const lbl = 'block text-xs font-semibold text-gray-500 mb-1 uppercase tracking-wider';
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                <UserPlus className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-white">Add Candidate</h3>
+                <p className="text-xs text-indigo-200">to {companyName}</p>
+              </div>
+            </div>
+            <button onClick={onClose} className="text-white/70 hover:text-white transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        {/* Body */}
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          {error && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{error}</div>
+          )}
+          {success && (
+            <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-sm px-4 py-3 rounded-lg flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" /> {success}
+            </div>
+          )}
+
+          <div>
+            <label className={lbl}>Full Name *</label>
+            <input id="cand-name" type="text" required value={form.full_name} onChange={set('full_name')} placeholder="e.g. Jane Doe" className={inp} />
+          </div>
+          <div>
+            <label className={lbl}>Email *</label>
+            <input id="cand-email" type="email" required value={form.email} onChange={set('email')} placeholder="jane@company.com" className={inp} />
+          </div>
+          <div>
+            <label className={lbl}>Department <span className="normal-case text-gray-400 font-normal">(optional)</span></label>
+            <input id="cand-dept" type="text" value={form.department} onChange={set('department')} placeholder="e.g. Sales, Marketing" className={inp} />
+          </div>
+          <div>
+            <label className={lbl}>Password *</label>
+            <div className="relative">
+              <input
+                id="cand-password"
+                type={showPassword ? 'text' : 'password'}
+                required
+                minLength={8}
+                value={form.password}
+                onChange={set('password')}
+                placeholder="Min 8 characters"
+                className={`${inp} pr-10`}
+              />
+              <button type="button" onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Candidate logs in at /login with this password</p>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <Button type="button" variant="secondary" onClick={onClose} className="flex-1">Cancel</Button>
+            <button
+              id="add-candidate-submit"
+              type="submit"
+              disabled={saving || !!success}
+              className="flex-1 py-2.5 px-4 rounded-xl font-semibold text-sm text-white
+                bg-gradient-to-r from-indigo-600 to-purple-600
+                hover:from-indigo-500 hover:to-purple-500
+                disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+            >
+              {saving ? 'Adding...' : 'Add Candidate'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export default function CompanyAuditPage() {
   const router = useRouter();
   const params = useParams();
@@ -254,6 +377,8 @@ export default function CompanyAuditPage() {
   const [selectedCandidate, setSelectedCandidate] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'roster' | 'topics'>('roster');
   const [isAddingTopic, setIsAddingTopic] = useState(false);
+  const [isAddingCandidate, setIsAddingCandidate] = useState(false);
+  const [successMsg, setSuccessMsg] = useState('');
 
   useEffect(() => {
     if (companyId) {
@@ -338,8 +463,8 @@ export default function CompanyAuditPage() {
           <button
             onClick={() => setActiveTab('roster')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'roster' 
-              ? 'bg-indigo-600 text-white shadow-md' 
+              activeTab === 'roster'
+              ? 'bg-indigo-600 text-white shadow-md'
               : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
@@ -348,8 +473,8 @@ export default function CompanyAuditPage() {
           <button
             onClick={() => setActiveTab('topics')}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-lg text-sm font-semibold transition-all ${
-              activeTab === 'topics' 
-              ? 'bg-indigo-600 text-white shadow-md' 
+              activeTab === 'topics'
+              ? 'bg-indigo-600 text-white shadow-md'
               : 'text-gray-500 hover:bg-gray-50'
             }`}
           >
@@ -357,11 +482,27 @@ export default function CompanyAuditPage() {
           </button>
         </div>
 
+        {/* Success toast */}
+        {successMsg && (
+          <div className="mb-4 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2 text-sm">
+            <CheckCircle className="w-4 h-4" /> {successMsg}
+          </div>
+        )}
+
         {activeTab === 'roster' ? (
           /* Users Table */
           <Card className="overflow-hidden">
-            <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white">
+            <div className="px-4 py-5 sm:px-6 border-b border-gray-200 bg-white flex justify-between items-center">
               <h3 className="text-lg leading-6 font-medium text-gray-900">Registered Users</h3>
+              <button
+                id="open-add-candidate-btn"
+                onClick={() => setIsAddingCandidate(true)}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm text-white
+                  bg-gradient-to-r from-indigo-600 to-purple-600
+                  hover:from-indigo-500 hover:to-purple-500 transition-all shadow-sm"
+              >
+                <UserPlus className="w-4 h-4" /> Add Candidate
+              </button>
             </div>
             <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
@@ -421,8 +562,15 @@ export default function CompanyAuditPage() {
                 ))}
                 {data?.users.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-6 py-10 text-center text-sm text-gray-500">
-                      This company has no active roster.
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+                      <p className="text-sm text-gray-500">No users in this company yet.</p>
+                      <button
+                        onClick={() => setIsAddingCandidate(true)}
+                        className="mt-3 text-sm text-indigo-600 hover:text-indigo-800 font-medium"
+                      >
+                        + Add the first candidate
+                      </button>
                     </td>
                   </tr>
                 )}
@@ -482,17 +630,30 @@ export default function CompanyAuditPage() {
       </main>
 
       {selectedCandidate && (
-        <CandidateDrawer 
-          candidateId={selectedCandidate} 
-          onClose={() => setSelectedCandidate(null)} 
+        <CandidateDrawer
+          candidateId={selectedCandidate}
+          onClose={() => setSelectedCandidate(null)}
+        />
+      )}
+
+      {isAddingCandidate && (
+        <AddCandidateModal
+          companyId={companyId}
+          companyName={data?.company?.name || ''}
+          onClose={() => setIsAddingCandidate(false)}
+          onCreated={(newUser) => {
+            setData((prev: any) => prev ? { ...prev, users: [newUser, ...prev.users] } : prev);
+            setSuccessMsg(`Candidate "${newUser.full_name}" added successfully!`);
+            setTimeout(() => setSuccessMsg(''), 4000);
+          }}
         />
       )}
 
       {isAddingTopic && (
-        <AddTopicModal 
-          companyId={companyId} 
-          onClose={() => setIsAddingTopic(false)} 
-          onSave={() => { setIsAddingTopic(false); fetchCompanyData(); }} 
+        <AddTopicModal
+          companyId={companyId}
+          onClose={() => setIsAddingTopic(false)}
+          onSave={() => { setIsAddingTopic(false); fetchCompanyData(); }}
         />
       )}
     </div>

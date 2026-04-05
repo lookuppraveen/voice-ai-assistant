@@ -18,7 +18,6 @@ api.interceptors.response.use(
   (res) => res,
   (err) => {
     const code = err.response?.data?.code;
-    // Only redirect to login on genuine token errors, not DB/server errors
     if (
       err.response?.status === 401 &&
       (code === 'TOKEN_EXPIRED' || code === 'INVALID_TOKEN' || err.response?.data?.error === 'No token provided')
@@ -72,7 +71,7 @@ export const topicsApi = {
   list: () => api.get('/api/topics'),
   get: (id: string) => api.get(`/api/topics/${id}`),
   create: (data: any) => api.post('/api/topics', data),
-  generatePrompt: (data: { name: string, description?: string }) => api.post('/api/topics/generate-prompt', data),
+  generatePrompt: (data: { name: string; description?: string }) => api.post('/api/topics/generate-prompt', data),
   update: (id: string, data: any) => api.put(`/api/topics/${id}`, data),
   delete: (id: string) => api.delete(`/api/topics/${id}`),
 };
@@ -102,7 +101,7 @@ export const adminApi = {
 export const companyApi = {
   listUsers: () => api.get('/api/company/users'),
   inviteUser: (data: any) => api.post('/api/company/users', data),
-  toggleUserStatus: (id: string, is_active: boolean) => api.put(`/api/company/users/${id}/status`, { is_active })
+  toggleUserStatus: (id: string, is_active: boolean) => api.put(`/api/company/users/${id}/status`, { is_active }),
 };
 
 // Super Admin
@@ -116,6 +115,8 @@ export const superAdminApi = {
   toggleCompanyStatus: (id: string) => api.patch(`/api/super-admin/companies/${id}/status`),
   getCompanyAudits: (id: string) => api.get(`/api/super-admin/companies/${id}/users`),
   createCompanyTopic: (id: string, data: any) => api.post(`/api/super-admin/companies/${id}/topics`, data),
+  createCandidate: (companyId: string, data: { full_name: string; email: string; password: string; department?: string }) =>
+    api.post(`/api/super-admin/companies/${companyId}/candidates`, data),
   getSettings: () => api.get('/api/super-admin/settings'),
   updateSetting: (key: string, value: string) => api.patch('/api/super-admin/settings', { key, value }),
 };
