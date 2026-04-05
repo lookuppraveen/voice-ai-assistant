@@ -4,6 +4,39 @@ const { transcribeAudio } = require('../services/whisperService');
 const elevenLabs = require('../services/elevenLabsService');
 const openaiTts = require('../services/openaiTtsService');
 
+// ── TTS Provider Cache ────────────────────────────────────────────────────────
+// Avoid hitting the DB on every turn just to read the TTS provider setting.
+let _cachedTtsProvider = null;
+let _cacheExpiry = 0;
+const TTS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+const getTtsProvider = async () => {
+  const now = Date.now();
+  if (_cachedTtsProvider && now < _cacheExpiry) return _cachedTtsProvider;
+  const res = await query(`SELECT setting_value FROM system_settings WHERE setting_key = 'tts_provider'`);
+  _cachedTtsProvider = res.rows[0]?.setting_value || 'openai';
+  _cacheExpiry = now + TTS_CACHE_TTL_MS;
+  return _cachedTtsProvider;
+};
+
+/**
+ * Generates TTS audio inline (used inside turn handlers).
+ * Returns a Buffer on success, or null on failure (caller should send text-only response).
+ */
+const generateInlineTTS = async (text) => {
+  try {
+    const provider = await getTtsProvider();
+    if (provider === 'openai') {
+      return await openaiTts.generateAudio(text);
+    } else {
+      return await elevenLabs.generateAudio(text);
+    }
+  } catch (err) {
+    console.error('Inline TTS error (non-fatal):', err.message);
+    return null; // Frontend will fall back to a separate TTS call
+  }
+};
+
 // GET /api/scenarios
 const listScenarios = (req, res) => {
   res.set('Cache-Control', 'no-store, max-age=0');
@@ -53,7 +86,11 @@ const processTurn = async (req, res, next) => {
   try {
     const { id: sessionId } = req.params;
 
-    // Validate session belongs to user
+    if (!req.file) {
+      return res.status(400).json({ error: 'Audio file required' });
+    }
+
+    // ── Step 1: Validate session ────────────────────────────────────────────
     const sessionResult = await query(
       `SELECT s.*, t.system_prompt, t.name as topic_name 
        FROM sessions s 
@@ -68,50 +105,55 @@ const processTurn = async (req, res, next) => {
 
     const session = sessionResult.rows[0];
 
-    // Get turn count
-    const countResult = await query(
-      'SELECT COUNT(*) as count FROM messages WHERE session_id = $1',
-      [sessionId]
-    );
+    // ── Step 2: PARALLEL — transcribe audio + fetch history + get turn count ─
+    // All three operations run simultaneously instead of sequentially.
+    const [userText, historyResult, countResult] = await Promise.all([
+      transcribeAudio(req.file.buffer, req.file.mimetype, req.file.originalname),
+      query(
+        `SELECT role, content FROM messages WHERE session_id = $1 ORDER BY turn_number ASC`,
+        [sessionId]
+      ),
+      query(
+        'SELECT COUNT(*) as count FROM messages WHERE session_id = $1',
+        [sessionId]
+      ),
+    ]);
+
     const turnNumber = parseInt(countResult.rows[0].count) + 1;
 
-    // Transcribe user audio
-    if (!req.file) {
-      return res.status(400).json({ error: 'Audio file required' });
-    }
+    // Build full conversation history in memory (no second DB fetch needed)
+    const fullHistory = [
+      ...historyResult.rows,
+      { role: 'user', content: userText },
+    ];
 
-    const userText = await transcribeAudio(
-      req.file.buffer,
-      req.file.mimetype,
-      req.file.originalname
-    );
+    // ── Step 3: PARALLEL — save user message + call Claude AI ───────────────
+    const [, aiText] = await Promise.all([
+      query(
+        `INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'user', $2, $3)`,
+        [sessionId, userText, turnNumber]
+      ),
+      getAIResponse(fullHistory, session.system_prompt),
+    ]);
 
-    // Save user message
-    await query(
-      `INSERT INTO messages (session_id, role, content, turn_number)
-       VALUES ($1, 'user', $2, $3)`,
-      [sessionId, userText, turnNumber]
-    );
-
-    // Fetch full conversation history
-    const historyResult = await query(
-      `SELECT role, content FROM messages WHERE session_id = $1 ORDER BY turn_number ASC`,
-      [sessionId]
-    );
-
-    const aiText = await getAIResponse(historyResult.rows, session.system_prompt);
-
-    // Save AI message
-    await query(
-      `INSERT INTO messages (session_id, role, content, turn_number)
-       VALUES ($1, 'assistant', $2, $3)`,
-      [sessionId, aiText, turnNumber + 1]
-    );
+    // ── Step 4: PARALLEL — save AI message to DB + generate TTS audio ────────
+    // TTS generation happens simultaneously with the DB write.
+    // This eliminates the separate frontend /tts round-trip entirely.
+    const [, audioBuffer] = await Promise.all([
+      query(
+        `INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'assistant', $2, $3)`,
+        [sessionId, aiText, turnNumber + 1]
+      ),
+      generateInlineTTS(aiText),
+    ]);
 
     res.json({
       user_message: userText,
       ai_response: { text: aiText },
       turn: turnNumber,
+      // Embed audio directly — frontend plays immediately, no extra HTTP call
+      audio_base64: audioBuffer ? audioBuffer.toString('base64') : null,
+      audio_mime: 'audio/mpeg',
     });
   } catch (err) {
     next(err);
@@ -142,34 +184,32 @@ const processTextTurn = async (req, res, next) => {
 
     const session = sessionResult.rows[0];
 
-    const countResult = await query(
-      'SELECT COUNT(*) as count FROM messages WHERE session_id = $1',
-      [sessionId]
-    );
+    // Parallel: get history + get turn count
+    const [historyResult, countResult] = await Promise.all([
+      query(`SELECT role, content FROM messages WHERE session_id = $1 ORDER BY turn_number ASC`, [sessionId]),
+      query('SELECT COUNT(*) as count FROM messages WHERE session_id = $1', [sessionId]),
+    ]);
     const turnNumber = parseInt(countResult.rows[0].count) + 1;
+    const fullHistory = [...historyResult.rows, { role: 'user', content: text.trim() }];
 
-    // Save user message (already transcribed by browser)
-    await query(
-      `INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'user', $2, $3)`,
-      [sessionId, text.trim(), turnNumber]
-    );
+    // Parallel: save user message + call Claude
+    const [, aiText] = await Promise.all([
+      query(`INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'user', $2, $3)`, [sessionId, text.trim(), turnNumber]),
+      getAIResponse(fullHistory, session.system_prompt),
+    ]);
 
-    const historyResult = await query(
-      `SELECT role, content FROM messages WHERE session_id = $1 ORDER BY turn_number ASC`,
-      [sessionId]
-    );
-
-    const aiText = await getAIResponse(historyResult.rows, session.system_prompt);
-
-    await query(
-      `INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'assistant', $2, $3)`,
-      [sessionId, aiText, turnNumber + 1]
-    );
+    // Parallel: save AI message + generate TTS
+    const [, audioBuffer] = await Promise.all([
+      query(`INSERT INTO messages (session_id, role, content, turn_number) VALUES ($1, 'assistant', $2, $3)`, [sessionId, aiText, turnNumber + 1]),
+      generateInlineTTS(aiText),
+    ]);
 
     res.json({
       user_message: text.trim(),
       ai_response: { text: aiText },
       turn: turnNumber,
+      audio_base64: audioBuffer ? audioBuffer.toString('base64') : null,
+      audio_mime: 'audio/mpeg',
     });
   } catch (err) {
     next(err);

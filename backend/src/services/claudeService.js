@@ -15,10 +15,18 @@ const getAIResponse = async (conversationHistory, systemPrompt) => {
   try {
     const messages = buildConversationMessages(conversationHistory);
 
+    // Append voice-optimized brevity rule to the topic's system prompt.
+    // Shorter responses = faster Claude generation + faster TTS synthesis.
+    const voiceSystemPrompt =
+      systemPrompt +
+      '\n\nCRITICAL: This is a real-time VOICE conversation. ' +
+      'Keep every reply to 1-3 short sentences maximum. ' +
+      'Be natural and concise — no lists, no headers, just spoken language.';
+
     const response = await client.messages.create({
-      model: 'claude-3-haiku-20240307', // Most universally compatible model
-      max_tokens: 300,
-      system: systemPrompt,
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 120,           // was 300 — shorter = faster generation + TTS
+      system: voiceSystemPrompt,
       messages,
     });
 

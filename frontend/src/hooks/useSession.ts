@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { sessionsApi } from '@/lib/api';
 import { Message, Evaluation } from '@/types';
 
@@ -23,15 +23,20 @@ export const useSession = () => {
     status: 'idle',
   });
 
+  // Keep a ref so async callbacks always have the latest sessionId
+  const sessionIdRef = useRef<string | null>(null);
+
   const setError = (error: string | null) =>
     setState((s) => ({ ...s, error, isLoading: false }));
 
-  // Returns opening text for TTS
-  const startSession = useCallback(async (scenarioType: string): Promise<string | null> => {
+  /** Start a session with a given topic_id. Returns opening text for TTS. */
+  const startSession = useCallback(async (topicId: string): Promise<string | null> => {
     setState((s) => ({ ...s, isLoading: true, error: null }));
     try {
-      const res = await sessionsApi.start(scenarioType);
+      const res = await sessionsApi.start(topicId);
       const { session, opening } = res.data;
+
+      sessionIdRef.current = session.id;
 
       const openingMsg: Message = {
         id: 'opening',
@@ -57,18 +62,19 @@ export const useSession = () => {
     }
   }, []);
 
-  // Returns AI response text for TTS
+  /** Send a pre-transcribed text turn (browser STT fallback). Returns AI response text. */
   const sendTurn = useCallback(async (transcribedText: string): Promise<string | null> => {
-    if (!state.sessionId) return null;
+    const id = sessionIdRef.current;
+    if (!id) return null;
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
     try {
-      const res = await sessionsApi.sendTextTurn(state.sessionId, transcribedText);
+      const res = await sessionsApi.sendTextTurn(id, transcribedText);
       const { user_message, ai_response, turn } = res.data;
 
       const userMsg: Message = {
         id: `user-${turn}`,
-        session_id: state.sessionId,
+        session_id: id,
         role: 'user',
         content: user_message,
         turn_number: turn,
@@ -77,7 +83,7 @@ export const useSession = () => {
 
       const aiMsg: Message = {
         id: `ai-${turn + 1}`,
-        session_id: state.sessionId,
+        session_id: id,
         role: 'assistant',
         content: ai_response.text,
         turn_number: turn + 1,
@@ -95,19 +101,28 @@ export const useSession = () => {
       setError(err.response?.data?.error || 'Failed to process turn');
       return null;
     }
-  }, [state.sessionId]);
+  }, []);
 
-  const sendAudioTurn = useCallback(async (audioBlob: Blob): Promise<string | null> => {
-    if (!state.sessionId) return null;
+  /** Send a recorded audio Blob. Whisper transcribes it server-side. Returns AI response + embedded audio. */
+  const sendAudioTurn = useCallback(async (audioBlob: Blob): Promise<{
+    text: string;
+    audioBase64: string | null;
+    audioMime: string;
+  } | null> => {
+    const id = sessionIdRef.current;
+    if (!id) {
+      console.error('Session: sendAudioTurn called with no active sessionId');
+      return null;
+    }
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
     try {
-      const res = await sessionsApi.sendAudioTurn(state.sessionId, audioBlob);
-      const { user_message, ai_response, turn } = res.data;
+      const res = await sessionsApi.sendAudioTurn(id, audioBlob);
+      const { user_message, ai_response, turn, audio_base64, audio_mime } = res.data;
 
       const userMsg: Message = {
         id: `user-${turn}`,
-        session_id: state.sessionId,
+        session_id: id,
         role: 'user',
         content: user_message,
         turn_number: turn,
@@ -116,7 +131,7 @@ export const useSession = () => {
 
       const aiMsg: Message = {
         id: `ai-${turn + 1}`,
-        session_id: state.sessionId,
+        session_id: id,
         role: 'assistant',
         content: ai_response.text,
         turn_number: turn + 1,
@@ -129,19 +144,25 @@ export const useSession = () => {
         isLoading: false,
       }));
 
-      return ai_response.text;
+      return {
+        text: ai_response.text,
+        audioBase64: audio_base64 || null,
+        audioMime: audio_mime || 'audio/mpeg',
+      };
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to process audio turn');
       return null;
     }
-  }, [state.sessionId]);
+  }, []);
 
+  /** End the session and trigger AI evaluation. */
   const completeSession = useCallback(async (): Promise<Evaluation | null> => {
-    if (!state.sessionId) return null;
+    const id = sessionIdRef.current;
+    if (!id) return null;
     setState((s) => ({ ...s, isLoading: true, error: null }));
 
     try {
-      const res = await sessionsApi.complete(state.sessionId);
+      const res = await sessionsApi.complete(id);
       const { evaluation } = res.data;
 
       setState((s) => ({
@@ -156,9 +177,11 @@ export const useSession = () => {
       setError(err.response?.data?.error || 'Failed to complete session');
       return null;
     }
-  }, [state.sessionId]);
+  }, []);
 
+  /** Reset to initial idle state. */
   const reset = useCallback(() => {
+    sessionIdRef.current = null;
     setState({
       sessionId: null,
       messages: [],

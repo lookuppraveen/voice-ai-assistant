@@ -8,16 +8,18 @@ const env = require('../config/env');
  */
 const generateAudio = async (text, options = {}) => {
   if (!text || text.trim() === '') return null;
-  const voice = options.voiceId || 'alloy'; // default openai voice
+  // 'nova' is slightly more natural for conversational voice than 'alloy'
+  const voice = options.voiceId || 'nova';
 
   try {
     const response = await axios.post(
       'https://api.openai.com/v1/audio/speech',
       {
-        model: 'tts-1',
-        voice: voice,
+        model: 'tts-1',       // tts-1 = fastest; tts-1-hd is higher quality but slower
+        voice,
         input: text,
-        response_format: 'mp3'
+        response_format: 'mp3',
+        speed: 1.0,           // 1.0 = natural; increase to 1.1 for slightly faster speech
       },
       {
         headers: {

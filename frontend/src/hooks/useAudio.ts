@@ -13,172 +13,220 @@ export const useAudio = () => {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
-
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
-  const dataArrayRef = useRef<Uint8Array<ArrayBuffer> | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const dataArrayRef = useRef<Uint8Array<any> | null>(null);
   const volRef = useRef(0);
 
+  // Tracks whether a stop was explicitly requested (manual stop)
+  const manualStopRef = useRef(false);
+
   /**
-   * One-time initialization of audio graph components
+   * Initialize AudioContext and Analyser once (lazy)
    */
   const getAudioTools = useCallback(() => {
-    if (!audioContextRef.current) {
-      console.log('Audio: Initializing new AudioContext and Analyser...');
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      const ctx = new AudioContext();
+    if (!audioContextRef.current || audioContextRef.current.state === 'closed') {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      const ctx = new Ctx();
       const analyser = ctx.createAnalyser();
       analyser.fftSize = 512;
-      
       audioContextRef.current = ctx;
       analyserRef.current = analyser;
-      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<ArrayBuffer>;
+      dataArrayRef.current = new Uint8Array(analyser.frequencyBinCount) as Uint8Array<any>;
     }
-    
     return {
-      ctx: audioContextRef.current,
+      ctx: audioContextRef.current!,
       analyser: analyserRef.current!,
-      dataArray: dataArrayRef.current!
+      dataArray: dataArrayRef.current!,
     };
   }, []);
 
   /**
-   * Start recording microphone
+   * Start recording microphone.
+   * autoStopEnabled = true  → auto-detect silence and stop
+   * autoStopEnabled = false → only stop when stopListening() is called manually
+   * 
+   * Returns a Promise<Blob | null>. Resolves when recording stops.
    */
-  const startListening = useCallback((autoStopEnabled = false): Promise<Blob | null> => {
-    return new Promise(async (resolve) => {
-      let sourceNode: MediaStreamAudioSourceNode | null = null;
-      let tickId: number | null = null;
+  const startListening = useCallback(
+    (autoStopEnabled = false): Promise<Blob | null> => {
+      return new Promise(async (resolve) => {
+        let sourceNode: MediaStreamAudioSourceNode | null = null;
+        let tickId: number | null = null;
+        manualStopRef.current = false;
 
-      try {
-        setError(null);
-        setListenState('idle'); // Safety reset
-        volRef.current = 0;
-
-        const { ctx, analyser, dataArray } = getAudioTools();
-        if (ctx.state === 'suspended') await ctx.resume();
-
-        console.log('Audio: Requesting microphone access...');
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-
-        // Connect the new stream to our persistent analyser
-        sourceNode = ctx.createMediaStreamSource(stream);
-        sourceNode.connect(analyser);
-
-        const mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
-        mediaRecorderRef.current = mediaRecorder;
-
-        const audioChunks: BlobPart[] = [];
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) audioChunks.push(e.data);
-        };
-
-        const cleanup = () => {
-          console.log('Audio: Cleaning up turn resources...');
-          if (tickId) cancelAnimationFrame(tickId);
-          if (sourceNode) {
-            sourceNode.disconnect();
-            sourceNode = null;
-          }
-          if (streamRef.current) {
-            streamRef.current.getTracks().forEach((track) => track.stop());
-            streamRef.current = null;
-          }
+        try {
+          setError(null);
+          setListenState('idle'); // safety reset
           volRef.current = 0;
-        };
 
-        mediaRecorder.onstop = () => {
-          console.log('Audio: MediaRecorder onstop fired. Chunks:', audioChunks.length);
-          cleanup();
-          setListenState('idle');
-          
-          if (audioChunks.length === 0) {
-            console.warn('Audio: No chunks captured.');
-            resolve(null);
-          } else {
-            const blob = new Blob(audioChunks, { type: 'audio/webm' });
-            resolve(blob);
+          const { ctx, analyser, dataArray } = getAudioTools();
+          if (ctx.state === 'suspended') {
+            await ctx.resume();
           }
-        };
 
-        let silenceStart = Date.now();
-        let hasSpoken = false;
-        let startTime = Date.now();
+          console.log('Audio: Requesting microphone...');
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          streamRef.current = stream;
 
-        const tick = () => {
-          if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+          sourceNode = ctx.createMediaStreamSource(stream);
+          sourceNode.connect(analyser);
 
-          analyser.getByteFrequencyData(dataArray);
-          
-          // Calculate peak for visualizer
-          let peak = 0;
-          for (let i = 0; i < dataArray.length; i++) {
+          // Prefer webm/opus; fall back gracefully
+          const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+            ? 'audio/webm;codecs=opus'
+            : MediaRecorder.isTypeSupported('audio/webm')
+            ? 'audio/webm'
+            : '';
+
+          const recorderOptions = mimeType ? { mimeType } : {};
+          const mediaRecorder = new MediaRecorder(stream, recorderOptions);
+          mediaRecorderRef.current = mediaRecorder;
+
+          const audioChunks: BlobPart[] = [];
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0) audioChunks.push(e.data);
+          };
+
+          const cleanup = () => {
+            console.log('Audio: Cleaning up recording resources...');
+            if (tickId !== null) cancelAnimationFrame(tickId);
+            tickId = null;
+            if (sourceNode) {
+              try { sourceNode.disconnect(); } catch (_) {}
+              sourceNode = null;
+            }
+            if (streamRef.current) {
+              streamRef.current.getTracks().forEach((t) => t.stop());
+              streamRef.current = null;
+            }
+            volRef.current = 0;
+          };
+
+          mediaRecorder.onstop = () => {
+            console.log('Audio: MediaRecorder stopped. Chunks:', audioChunks.length);
+            cleanup();
+            // Transition to 'processing' so the UI and isBusy reflect it
+            setListenState('processing');
+
+            if (audioChunks.length === 0) {
+              console.warn('Audio: No audio chunks captured.');
+              setListenState('idle');
+              resolve(null);
+            } else {
+              const blob = new Blob(audioChunks, { type: mimeType || 'audio/webm' });
+              resolve(blob);
+            }
+          };
+
+          let silenceStart = Date.now();
+          let hasSpoken = false;
+          const startTime = Date.now();
+
+          const tick = () => {
+            // Guard: if recorder is no longer recording, stop ticking
+            if (!mediaRecorder || mediaRecorder.state !== 'recording') return;
+
+            analyser.getByteFrequencyData(dataArray);
+
+            // Peak for visualiser
+            let peak = 0;
+            for (let i = 0; i < dataArray.length; i++) {
               if (dataArray[i] > peak) peak = dataArray[i];
-          }
-          volRef.current = peak;
-          
-          // Calculate speech volume (approx 800Hz - 5kHz)
-          let speechVol = 0;
-          for (let i = 10; i < 60; i++) {
-            if (dataArray[i] > speechVol) speechVol = dataArray[i];
-          }
+            }
+            volRef.current = peak;
 
-          if (autoStopEnabled) {
-            const THRESHOLD = 30; // Balanced for noise rejection + voice sensitivity
-            if (speechVol > THRESHOLD) { 
-              if (!hasSpoken) console.log('Audio: Speech detected at vol:', speechVol);
-              hasSpoken = true;
-              silenceStart = Date.now();
+            // Speech band ~300Hz–5kHz (bins 4–60 for fftSize=512 at 44.1kHz)
+            let speechVol = 0;
+            for (let i = 4; i < 60; i++) {
+              if (dataArray[i] > speechVol) speechVol = dataArray[i];
             }
 
-            const silenceDuration = Date.now() - silenceStart;
-            const captureDuration = Date.now() - startTime;
+            if (autoStopEnabled) {
+              const THRESHOLD = 25;
+              const now = Date.now();
+              const captureDuration = now - startTime;
 
-            // 1. Stop if silence after speaking
-            // 2. Stop if NO speech detected for 15s (User forgot to talk)
-            // 3. Stop if Turn exceeds 30s regardless (Global safety timeout)
-            if (captureDuration > 30000) {
-              console.log('Audio: Auto-stop (hard 30s limit)');
-              mediaRecorder.stop();
-            } else if (hasSpoken && silenceDuration > 1200) { // Balanced (1.2s)
-              console.log('Audio: Auto-stop (silence after speech)');
-              mediaRecorder.stop();
-            } else if (!hasSpoken && captureDuration > 15000) { 
-              console.log('Audio: Auto-stop (initial timeout)');
-              mediaRecorder.stop();
+              if (speechVol > THRESHOLD) {
+                if (!hasSpoken) console.log('Audio: Speech detected, vol=', speechVol);
+                hasSpoken = true;
+                silenceStart = now;
+              }
+
+              const silenceDuration = now - silenceStart;
+
+              if (captureDuration > 30000) {
+                console.log('Audio: Auto-stop (30s hard limit)');
+                mediaRecorder.stop();
+              } else if (hasSpoken && silenceDuration > 1000) {
+                // 1.0s silence after speech — user confirmed
+                console.log('Audio: Auto-stop (1.0s silence after speech)');
+                mediaRecorder.stop();
+              } else if (!hasSpoken && captureDuration > 10000) {
+                // 10s timeout if user never speaks
+                console.log('Audio: Auto-stop (no speech in 10s)');
+                mediaRecorder.stop();
+              } else {
+                tickId = requestAnimationFrame(tick);
+              }
             } else {
               tickId = requestAnimationFrame(tick);
             }
-          } else {
-            tickId = requestAnimationFrame(tick);
-          }
-        };
+          };
 
-        tickId = requestAnimationFrame(tick);
-        mediaRecorder.start();
-        setListenState('listening');
-        console.log('Audio: Recording started.');
-      } catch (err: any) {
-        console.error('Audio: startListening error:', err);
-        setListenState('idle');
-        setError(`Microphone error: ${err.message}`);
-        resolve(null);
-      }
-    });
-  }, [getAudioTools]);
+          // Collect data every 250ms so we don't miss audio at stop()
+          mediaRecorder.start(250);
+          tickId = requestAnimationFrame(tick);
+          setListenState('listening');
+          console.log('Audio: Recording started (autoStop=', autoStopEnabled, ')');
+        } catch (err: any) {
+          console.error('Audio: startListening error:', err);
+          setListenState('idle');
+          const msg =
+            err.name === 'NotAllowedError'
+              ? 'Microphone access denied. Please allow microphone in browser settings.'
+              : err.name === 'NotFoundError'
+              ? 'No microphone found. Please connect a microphone and try again.'
+              : `Microphone error: ${err.message}`;
+          setError(msg);
+          resolve(null);
+        }
+      });
+    },
+    [getAudioTools]
+  );
 
+  /**
+   * Stop recording manually (in manual mode).
+   */
   const stopListening = useCallback(() => {
+    manualStopRef.current = true;
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
       mediaRecorderRef.current.stop();
     }
   }, []);
 
   /**
-   * Fetch TTS from backend and play it natively
+   * Signal that we finished processing (called by page after sendAudioTurn resolves).
+   * Resets 'processing' state back to 'idle'.
+   */
+  const setIdle = useCallback(() => {
+    setListenState('idle');
+  }, []);
+
+  /**
+   * Fetch TTS audio from backend and play it.
+   * Waits until audio has fully finished playing before resolving.
    */
   const speakText = useCallback(async (text: string): Promise<void> => {
     if (!text || !text.trim()) return;
+
+    // Stop any previous playback
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
 
     try {
       setIsSpeaking(true);
@@ -186,67 +234,133 @@ export const useAudio = () => {
 
       const res = await sessionsApi.getTTSAudio(text);
       if (!(res.data instanceof Blob)) {
-        throw new Error('Invalid audio data received');
+        throw new Error('Invalid audio data received from TTS server');
       }
 
       const url = URL.createObjectURL(res.data);
-      const audio = new Audio(url);
-      
-      // Ensure the browser 'unmutes' the audio correctly
-      audio.autoplay = false;
-      audio.preload = 'auto';
-
-      currentAudioRef.current = audio;
+      const audioEl = new Audio(url);
+      audioEl.autoplay = false;
+      audioEl.preload = 'auto';
+      currentAudioRef.current = audioEl;
 
       return new Promise((resolve) => {
-        audio.oncanplaythrough = () => {
-          audio.play().catch((err) => {
-            console.error('Audio Play Error:', err);
-            setError(`Playback failed: ${err.message}`);
-            resolve();
+        const done = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          if (currentAudioRef.current === audioEl) {
+            currentAudioRef.current = null;
+          }
+          resolve();
+        };
+
+        audioEl.oncanplaythrough = () => {
+          audioEl.play().catch((playErr) => {
+            console.error('Audio: play() error:', playErr);
+            setError(`Playback failed: ${playErr.message}`);
+            done();
           });
         };
 
-        audio.onended = () => {
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          currentAudioRef.current = null;
-          resolve();
+        audioEl.onended = () => {
+          console.log('Audio: TTS playback complete.');
+          done();
         };
 
-        audio.onerror = (e) => {
-          console.error('Audio Element Error:', e);
-          setIsSpeaking(false);
-          URL.revokeObjectURL(url);
-          currentAudioRef.current = null;
-          resolve();
+        audioEl.onerror = (e) => {
+          console.error('Audio: element error:', e);
+          done();
         };
+
+        // Fallback: if canplaythrough never fires (already loaded)
+        if (audioEl.readyState >= 3) {
+          audioEl.play().catch((playErr) => {
+            console.error('Audio: play() fallback error:', playErr);
+            setError(`Playback failed: ${playErr.message}`);
+            done();
+          });
+        }
       });
     } catch (err: any) {
-      let errorMessage = 'Failed to load HQ audio response.';
+      let errorMessage = 'Failed to load audio response.';
 
-      // Attempt to extract more specific error from response
       if (err.response?.data) {
         try {
           if (err.response.data instanceof Blob && err.response.data.type === 'application/json') {
-            const errorText = await err.response.data.text();
-            const errorJson = JSON.parse(errorText);
-            if (errorJson.error) errorMessage = `HQ Audio: ${errorJson.error}`;
+            const txt = await err.response.data.text();
+            const json = JSON.parse(txt);
+            if (json.error) errorMessage = `TTS Error: ${json.error}`;
           } else if (err.response.data.error) {
-            errorMessage = `HQ Audio: ${err.response.data.error}`;
+            errorMessage = `TTS Error: ${err.response.data.error}`;
           }
-        } catch (e) {
-          console.error('Error parsing TTS failure:', e);
-        }
+        } catch (_) {}
       } else if (err.message) {
-        errorMessage = `HQ Audio: ${err.message}`;
+        errorMessage = `TTS Error: ${err.message}`;
       }
 
+      console.error('Audio: speakText error:', errorMessage);
       setError(errorMessage);
       setIsSpeaking(false);
     }
   }, []);
 
+  /**
+   * Play audio from a base64 string (embedded directly in turn API response).
+   * This avoids a separate /tts HTTP round trip entirely.
+   */
+  const playBase64Audio = useCallback(async (base64: string, mime = 'audio/mpeg'): Promise<void> => {
+    if (!base64) return;
+
+    // Stop any prior playback
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current = null;
+    }
+
+    try {
+      setIsSpeaking(true);
+      setError(null);
+
+      // Decode base64 → Uint8Array → Blob → Object URL
+      const binary = atob(base64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      const blob = new Blob([bytes], { type: mime });
+      const url = URL.createObjectURL(blob);
+
+      const audioEl = new Audio(url);
+      audioEl.autoplay = false;
+      audioEl.preload = 'auto';
+      currentAudioRef.current = audioEl;
+
+      return new Promise((resolve) => {
+        const done = () => {
+          setIsSpeaking(false);
+          URL.revokeObjectURL(url);
+          if (currentAudioRef.current === audioEl) currentAudioRef.current = null;
+          resolve();
+        };
+
+        audioEl.oncanplaythrough = () => {
+          audioEl.play().catch((e) => { console.error('Base64 play error:', e); done(); });
+        };
+        audioEl.onended = () => { console.log('Audio: inline audio complete.'); done(); };
+        audioEl.onerror = () => done();
+
+        // If already buffered
+        if (audioEl.readyState >= 3) {
+          audioEl.play().catch((e) => { console.error('Base64 play fallback error:', e); done(); });
+        }
+      });
+    } catch (err: any) {
+      console.error('Audio: playBase64Audio error:', err.message);
+      setError(`Playback error: ${err.message}`);
+      setIsSpeaking(false);
+    }
+  }, []);
+
+  /**
+   * Immediately stop TTS playback.
+   */
   const stopSpeaking = useCallback(() => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -265,7 +379,9 @@ export const useAudio = () => {
     isProcessing: listenState === 'processing',
     startListening,
     stopListening,
+    setIdle,
     speakText,
+    playBase64Audio,
     stopSpeaking,
   };
 };
